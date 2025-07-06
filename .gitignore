@@ -30,3 +30,6 @@ cmake-build-relwithdebinfo
 packaging/Output/*
 
 build/
+
+.vscode/
+.cache/
