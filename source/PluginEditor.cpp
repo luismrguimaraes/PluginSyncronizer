@@ -1,9 +1,165 @@
 #include "PluginEditor.h"
 
-PluginEditor::PluginEditor (PluginProcessor& p)
-    : AudioProcessorEditor (&p), processorRef (p)
+constexpr auto margin = 10;
+
+static void doLayout (juce::Component* main, juce::Component& bottom, int bottomHeight, juce::Rectangle<int> bounds)
 {
-    juce::ignoreUnused (processorRef);
+    juce::Grid grid;
+    grid.setGap (juce::Grid::Px { margin });
+    grid.templateColumns = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
+    grid.templateRows = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } },
+        juce::Grid::TrackInfo { juce::Grid::Px { bottomHeight } } };
+    grid.items = { juce::GridItem { main }, juce::GridItem { bottom }.withMargin ({ 0, margin, margin, margin }) };
+    grid.performLayout (bounds);
+}
+
+class PluginLoaderComponent final : public juce::Component
+{
+public:
+    template <typename Callback>
+    PluginLoaderComponent (juce::AudioPluginFormatManager& manager,
+        juce::KnownPluginList& list,
+        Callback&& callback)
+        : pluginListComponent (manager, list, {}, {})
+    {
+        pluginListComponent.getTableListBox().setMultipleSelectionEnabled (false);
+
+        addAndMakeVisible (pluginListComponent);
+        addAndMakeVisible (buttons);
+
+        const auto getCallback = [this, &list, cb = std::forward<Callback> (callback)] (EditorStyle style) {
+            return [this, &list, cb, style] {
+                const auto index = pluginListComponent.getTableListBox().getSelectedRow();
+                const auto& types = list.getTypes();
+
+                if (juce::isPositiveAndBelow (index, types.size()))
+                    juce::NullCheckedInvocation::invoke (cb, types.getReference (index), style);
+            };
+        };
+
+        buttons.thisWindowButton.onClick = getCallback (EditorStyle::thisWindow);
+        buttons.newWindowButton.onClick = getCallback (EditorStyle::newWindow);
+    }
+
+    void resized() override
+    {
+        doLayout (&pluginListComponent, buttons, 80, getLocalBounds());
+    }
+
+private:
+    struct Buttons final : public Component
+    {
+        Buttons()
+        {
+            label.setJustificationType (juce::Justification::centred);
+
+            addAndMakeVisible (label);
+            // addAndMakeVisible (thisWindowButton);
+            addAndMakeVisible (newWindowButton);
+        }
+
+        void resized() override
+        {
+            juce::Grid vertical;
+            vertical.autoFlow = juce::Grid::AutoFlow::row;
+            vertical.setGap (juce::Grid::Px { margin });
+            vertical.autoRows = vertical.autoColumns = juce::Grid::TrackInfo { juce::Grid::Fr { 1 } };
+            vertical.items.insertMultiple (0, juce::GridItem {}, 2);
+            vertical.performLayout (getLocalBounds());
+
+            label.setBounds (vertical.items[0].currentBounds.toNearestInt());
+
+            juce::Grid grid;
+            grid.autoFlow = juce::Grid::AutoFlow::column;
+            grid.setGap (juce::Grid::Px { margin });
+            grid.autoRows = grid.autoColumns = juce::Grid::TrackInfo { juce::Grid::Fr { 1 } };
+            grid.items = { juce::GridItem { thisWindowButton },
+                juce::GridItem { newWindowButton } };
+
+            grid.performLayout (vertical.items[1].currentBounds.toNearestInt());
+        }
+
+        juce::Label label { "", "Select a plugin from the list, then display it using the buttons below." };
+        juce::TextButton thisWindowButton { "Open In This Window" };
+        juce::TextButton newWindowButton { "Open In New Window" };
+    };
+
+    juce::PluginListComponent pluginListComponent;
+    Buttons buttons;
+};
+
+class PluginEditorComponent final : public juce::Component
+{
+public:
+    template <typename Callback>
+    PluginEditorComponent (std::unique_ptr<juce::AudioProcessorEditor> editorIn, Callback&& onClose)
+        : editor (std::move (editorIn))
+    {
+        addAndMakeVisible (editor.get());
+        addAndMakeVisible (closeButton);
+
+        childBoundsChanged (editor.get());
+
+        closeButton.onClick = std::forward<Callback> (onClose);
+    }
+
+    void setScaleFactor (float scale)
+    {
+        if (editor != nullptr)
+            editor->setScaleFactor (scale);
+    }
+
+    void resized() override
+    {
+        doLayout (editor.get(), closeButton, buttonHeight, getLocalBounds());
+    }
+
+    void childBoundsChanged (Component* child) override
+    {
+        if (child != editor.get())
+            return;
+
+        const auto size = editor != nullptr ? editor->getLocalBounds()
+                                            : juce::Rectangle<int>();
+
+        setSize (size.getWidth(), margin + buttonHeight + size.getHeight());
+    }
+
+private:
+    static constexpr auto buttonHeight = 40;
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor;
+    juce::TextButton closeButton { "Close Plugin" };
+};
+
+//==============================================================================
+class ScaledDocumentWindow final : public juce::DocumentWindow
+{
+public:
+    ScaledDocumentWindow (juce::Colour bg, float scale)
+        : DocumentWindow ("Editor", bg, 0), desktopScale (scale) {}
+
+    float getDesktopScaleFactor() const override { return juce::Desktop::getInstance().getGlobalScaleFactor() * desktopScale; }
+
+private:
+    float desktopScale = 1.0f;
+};
+
+PluginEditor::PluginEditor (PluginProcessor& p)
+    : AudioProcessorEditor (&p), processorRef (p), scopedCallback (p.pluginChanged, [this] { pluginChanged(); })
+{
+    loader = std::make_unique<PluginLoaderComponent> (p.pluginFormatManager, p.pluginList, [&p] (const juce::PluginDescription& pd, EditorStyle editorStyle) {
+        p.setNewPlugin (pd, editorStyle);
+    });
+
+    setSize (500, 500);
+    setResizable (false, false);
+    addAndMakeVisible (closeButton);
+    addAndMakeVisible (loader.get());
+
+    p.pluginChanged();
+
+    closeButton.onClick = [this] { clearPlugin(); };
 
     addAndMakeVisible (inspectButton);
 
@@ -17,10 +173,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
         inspector->setVisible (true);
     };
-
-    // Make sure that before the constructor has finished, you've set the
-    // editor's size to whatever you need it to be.
-    setSize (400, 300);
 }
 
 PluginEditor::~PluginEditor()
@@ -32,17 +184,93 @@ void PluginEditor::paint (juce::Graphics& g)
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 
-    auto area = getLocalBounds();
-    g.setColour (juce::Colours::white);
-    g.setFont (16.0f);
-    auto helloWorld = juce::String ("Hello from ") + PRODUCT_NAME_WITHOUT_VERSION + " v" VERSION + " running in " + CMAKE_BUILD_TYPE;
-    g.drawText (helloWorld, area.removeFromTop (150), juce::Justification::centred, false);
+    // auto area = getLocalBounds();
+    // g.setColour (juce::Colours::white);
+    // g.setFont (16.0f);
+    // auto helloWorld = juce::String ("Hello from ") + PRODUCT_NAME_WITHOUT_VERSION + " v" VERSION + " running in " + CMAKE_BUILD_TYPE;
+    // g.drawText (helloWorld, area.removeFromTop (150), juce::Justification::centred, false);
 }
 
 void PluginEditor::resized()
 {
-    // layout the positions of your child components here
-    auto area = getLocalBounds();
-    area.removeFromBottom(50);
-    inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre(100, 50));
+    // // layout the positions of your child components here
+    // auto area = getLocalBounds();
+    // area.removeFromBottom (50);
+    // inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre (100, 50));
+
+    closeButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, buttonHeight));
+    loader->setBounds (getLocalBounds());
+}
+
+void PluginEditor::childBoundsChanged ([[maybe_unused]] Component* child)
+{
+    const auto size = editor != nullptr ? editor->getLocalBounds()
+                                        : juce::Rectangle<int>();
+
+    setSize (size.getWidth(), size.getHeight());
+}
+
+void PluginEditor::setScaleFactor (float scale)
+{
+    currentScaleFactor = scale;
+    AudioProcessorEditor::setScaleFactor (scale);
+
+    [[maybe_unused]] const auto posted = juce::MessageManager::callAsync ([ref = SafePointer<PluginEditor> (this), scale] {
+        if (auto* r = ref.getComponent())
+            if (auto* e = r->currentEditorComponent)
+                e->setScaleFactor (scale);
+    });
+
+    jassert (posted);
+}
+
+void PluginEditor::pluginChanged()
+{
+    loader->setVisible (!processorRef.isPluginLoaded());
+    closeButton.setVisible (processorRef.isPluginLoaded());
+
+    if (processorRef.isPluginLoaded())
+    {
+        auto editorComponent = std::make_unique<PluginEditorComponent> (processorRef.createInnerEditor(), [this] {
+            [[maybe_unused]] const auto posted = juce::MessageManager::callAsync ([this] { clearPlugin(); });
+            jassert (posted);
+        });
+
+        editorComponent->setScaleFactor (currentScaleFactor);
+        currentEditorComponent = editorComponent.get();
+
+        editor = [&]() -> std::unique_ptr<Component> {
+            switch (processorRef.getEditorStyle())
+            {
+                case EditorStyle::thisWindow:
+                    addAndMakeVisible (editorComponent.get());
+                    setSize (editorComponent->getWidth(), editorComponent->getHeight());
+                    return std::move (editorComponent);
+
+                case EditorStyle::newWindow:
+                    const auto bg = getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker();
+                    auto window = std::make_unique<ScaledDocumentWindow> (bg, currentScaleFactor);
+                    window->setAlwaysOnTop (true);
+                    window->setContentOwned (editorComponent.release(), true);
+                    window->centreAroundComponent (this, window->getWidth(), window->getHeight());
+                    window->setVisible (true);
+                    return window;
+            }
+
+            jassertfalse;
+            return nullptr;
+        }();
+    }
+    else
+    {
+        editor = nullptr;
+        setSize (500, 500);
+    }
+}
+
+void PluginEditor::clearPlugin()
+{
+    currentEditorComponent = nullptr;
+    editor = nullptr;
+    processorRef.clearPlugin();
 }

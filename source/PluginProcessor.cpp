@@ -3,15 +3,34 @@
 
 //==============================================================================
 PluginProcessor::PluginProcessor()
-     : AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       )
+    : AudioProcessor (BusesProperties()
+#if !JucePlugin_IsMidiEffect
+    #if !JucePlugin_IsSynth
+                          .withInput ("Input", juce::AudioChannelSet::stereo(), true)
+    #endif
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+#endif
+    )
 {
+    appProperties.setStorageParameters ([&] {
+        juce::PropertiesFile::Options opt;
+        opt.applicationName = getName();
+        opt.commonToAllUsers = false;
+        opt.doNotSave = false;
+        opt.filenameSuffix = ".props";
+        opt.ignoreCaseOfKeyNames = false;
+        opt.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML;
+        opt.osxLibrarySubFolder = "Application Support";
+        return opt;
+    }());
+
+    pluginFormatManager.addDefaultFormats();
+
+    if (auto savedPluginList = appProperties.getUserSettings()->getXmlValue ("pluginList"))
+        pluginList.recreateFromXml (*savedPluginList);
+
+    juce::MessageManagerLock lock;
+    pluginList.addChangeListener (this);
 }
 
 PluginProcessor::~PluginProcessor()
@@ -26,29 +45,29 @@ const juce::String PluginProcessor::getName() const
 
 bool PluginProcessor::acceptsMidi() const
 {
-   #if JucePlugin_WantsMidiInput
+#if JucePlugin_WantsMidiInput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool PluginProcessor::producesMidi() const
 {
-   #if JucePlugin_ProducesMidiOutput
+#if JucePlugin_ProducesMidiOutput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool PluginProcessor::isMidiEffect() const
 {
-   #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 double PluginProcessor::getTailLengthSeconds() const
@@ -58,8 +77,8 @@ double PluginProcessor::getTailLengthSeconds() const
 
 int PluginProcessor::getNumPrograms()
 {
-    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    return 1; // NB: some hosts don't cope very well if you tell them there are 0 programs,
+        // so this should be at least 1, even if you're not really implementing programs.
 }
 
 int PluginProcessor::getCurrentProgram()
@@ -86,69 +105,83 @@ void PluginProcessor::changeProgramName (int index, const juce::String& newName)
 //==============================================================================
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    const juce::ScopedLock sl (innerMutex);
+
+    active = true;
+
+    if (inner != nullptr)
+    {
+        inner->setRateAndBufferSizeDetails (sampleRate, samplesPerBlock);
+        inner->prepareToPlay (sampleRate, samplesPerBlock);
+    }
+    // // Use this method as the place to do any pre-playback
+    // // initialisation that you need..
+    // juce::ignoreUnused (sampleRate, samplesPerBlock);
 }
 
 void PluginProcessor::releaseResources()
 {
+    const juce::ScopedLock sl (innerMutex);
+
+    active = false;
+
+    if (inner != nullptr)
+        inner->releaseResources();
     // When playback stops, you can use this as an opportunity to free up any
     // spare memory, etc.
 }
 
+void PluginProcessor::reset()
+{
+    const juce::ScopedLock sl (innerMutex);
+
+    if (inner != nullptr)
+        inner->reset();
+}
+
 bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
-    juce::ignoreUnused (layouts);
-    return true;
-  #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    const auto& mainOutput = layouts.getMainOutputChannelSet();
+    const auto& mainInput = layouts.getMainInputChannelSet();
+
+    if (!mainInput.isDisabled() && mainInput != mainOutput)
         return false;
 
-    // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
+    if (mainOutput.size() > 2)
         return false;
-   #endif
 
     return true;
-  #endif
+
+    // #if JucePlugin_IsMidiEffect
+    //     juce::ignoreUnused (layouts);
+    //     return true;
+    // #else
+    //     // This is the place where you check if the layout is supported.
+    //     // In this template code we only support mono or stereo.
+    //     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
+    //         && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    //         return false;
+
+    //         // This checks if the input layout matches the output layout
+    //     #if !JucePlugin_IsSynth
+    //     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
+    //         return false;
+    //     #endif
+
+    //     return true;
+    // #endif
 }
 
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                              juce::MidiBuffer& midiMessages)
+    juce::MidiBuffer& midiMessages)
 {
-    juce::ignoreUnused (midiMessages);
+    jassert (!isUsingDoublePrecision());
+}
 
-    juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
-    }
+void PluginProcessor::processBlock (juce::AudioBuffer<double>& buffer,
+    juce::MidiBuffer& midiMessages)
+{
+    jassert (!isUsingDoublePrecision());
 }
 
 //==============================================================================
@@ -165,17 +198,108 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
 //==============================================================================
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+    const juce::ScopedLock sl (innerMutex);
+
+    juce::XmlElement xml ("state");
+
+    if (inner != nullptr)
+    {
+        xml.setAttribute (editorStyleTag, (int) editorStyle);
+        xml.addChildElement (inner->getPluginDescription().createXml().release());
+        xml.addChildElement ([this] {
+            juce::MemoryBlock innerState;
+            inner->getStateInformation (innerState);
+
+            auto stateNode = std::make_unique<juce::XmlElement> (innerStateTag);
+            stateNode->addTextElement (innerState.toBase64Encoding());
+            return stateNode.release();
+        }());
+    }
+
+    const auto text = xml.toString();
+    destData.replaceAll (text.toRawUTF8(), text.getNumBytesAsUTF8());
+
     // You should use this method to store your parameters in the memory block.
     // You could do that either as raw data, or use the XML or ValueTree classes
     // as intermediaries to make it easy to save and load complex data.
-    juce::ignoreUnused (destData);
 }
 
 void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
+    const juce::ScopedLock sl (innerMutex);
+
+    auto xml = juce::XmlDocument::parse (juce::String (juce::CharPointer_UTF8 (static_cast<const char*> (data)), (size_t) sizeInBytes));
+
+    if (auto* pluginNode = xml->getChildByName ("PLUGIN"))
+    {
+        juce::PluginDescription pd;
+        pd.loadFromXml (*pluginNode);
+
+        juce::MemoryBlock innerState;
+        innerState.fromBase64Encoding (xml->getChildElementAllSubText (innerStateTag, {}));
+
+        setNewPlugin (pd,
+            (EditorStyle) xml->getIntAttribute (editorStyleTag, 0),
+            innerState);
+    }
+
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
-    juce::ignoreUnused (data, sizeInBytes);
+}
+
+void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb)
+{
+    const juce::ScopedLock sl (innerMutex);
+
+    const auto callback = [this, where, mb] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
+        if (error.isNotEmpty())
+        {
+            auto options = juce::MessageBoxOptions::makeOptionsOk (juce::MessageBoxIconType::WarningIcon,
+                "Plugin Load Failed",
+                error);
+            messageBox = juce::AlertWindow::showScopedAsync (options, nullptr);
+            return;
+        }
+
+        inner = std::move (instance);
+        editorStyle = where;
+
+        if (inner != nullptr && !mb.isEmpty())
+            inner->setStateInformation (mb.getData(), (int) mb.getSize());
+
+        // In a 'real' plugin, we'd also need to set the bus configuration of the inner plugin.
+        // One possibility would be to match the bus configuration of the wrapper plugin, but
+        // the inner plugin isn't guaranteed to support the same layout. Alternatively, we
+        // could try to apply a reasonably similar layout, and maintain a mapping between the
+        // inner/outer channel layouts.
+        //
+        // In any case, it is essential that the inner plugin is told about the bus
+        // configuration that will be used. The AudioBuffer passed to the inner plugin must also
+        // exactly match this layout.
+
+        if (active)
+        {
+            inner->setRateAndBufferSizeDetails (getSampleRate(), getBlockSize());
+            inner->prepareToPlay (getSampleRate(), getBlockSize());
+        }
+
+        juce::NullCheckedInvocation::invoke (pluginChanged);
+    };
+
+    pluginFormatManager.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback);
+}
+
+void PluginProcessor::changeListenerCallback (juce::ChangeBroadcaster* source)
+{
+    if (source != &pluginList)
+        return;
+
+    auto savedPluginList = pluginList.createXml();
+    if (savedPluginList)
+    {
+        appProperties.getUserSettings()->setValue ("pluginList", savedPluginList.get());
+        appProperties.saveIfNeeded();
+    }
 }
 
 //==============================================================================

@@ -82,7 +82,11 @@ juce_add_plugin("${PROJECT_NAME}"
     # This is how it's listed in the DAW
     # This can be different from PROJECT_NAME and can have spaces!
     # You might want to use v${MAJOR_VERSION} here once you go to v2...
-    PRODUCT_NAME "${PRODUCT_NAME}")
+    PRODUCT_NAME "${PRODUCT_NAME}"
+    
+    PLUGINHOST_AU TRUE
+    PLUGINHOST_LV2 TRUE
+    PLUGINHOST_VST3 TRUE)
 
 # This lets us use our code in both the JUCE targets and our Test target
 # Without running into ODR violations
