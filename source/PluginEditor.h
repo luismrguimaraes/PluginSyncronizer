@@ -1,6 +1,5 @@
 #pragma once
 
-#include "BinaryData.h"
 #include "PluginProcessor.h"
 #include "melatonin_inspector/melatonin_inspector.h"
 
@@ -24,23 +23,21 @@ private: //NOLINT
     void clearPlugin();
 
 private:
-    static constexpr auto buttonHeight = 30;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
-    PluginProcessor& processorRef;
+    PluginProcessor& processorRef_;
 
-    std::unique_ptr<PluginLoaderComponent> loader;
-    std::unique_ptr<melatonin::Inspector> inspector;
-    juce::ScopedValueSetter<std::function<void()>> scopedCallback;
-    std::unique_ptr<Component> editor;
+    std::unique_ptr<PluginLoaderComponent> loader_;
+    std::unique_ptr<melatonin::Inspector> inspector_;
+    juce::ScopedValueSetter<std::function<void()>> scopedCallback_;
+    std::unique_ptr<Component> editor_;
 
-    float currentScaleFactor { 1.0f };
+    float currentScaleFactor_ { 1.0f };
 
-    juce::TextButton closeButton { "Close Plugin" };
-    juce::TextButton inspectButton { "Inspect the UI" };
+    juce::TextButton closeButton_ { "Close Plugin" };
+    juce::TextButton inspectButton_ { "Inspect the UI" };
 
-    PluginEditorComponent* currentEditorComponent = nullptr;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
+    PluginEditorComponent* currentEditorComponent_ = nullptr;
 };

@@ -1,6 +1,10 @@
 #include "PluginEditor.h"
 
-constexpr auto margin = 10;
+namespace
+{
+    constexpr auto buttonHeight = 30;
+    constexpr auto margin = 10;
+}
 
 static void doLayout (juce::Component* main, juce::Component& bottom, int bottomHeight, juce::Rectangle<int> bounds)
 {
@@ -96,7 +100,7 @@ public:
         : editor (std::move (editorIn))
     {
         addAndMakeVisible (editor.get());
-        addAndMakeVisible (closeButton);
+        // addAndMakeVisible (closeButton);
 
         childBoundsChanged (editor.get());
 
@@ -126,7 +130,7 @@ public:
     }
 
 private:
-    static constexpr auto buttonHeight = 40;
+    static constexpr int buttonHeight { 0 };
 
     std::unique_ptr<juce::AudioProcessorEditor> editor;
     juce::TextButton closeButton { "Close Plugin" };
@@ -146,32 +150,32 @@ private:
 };
 
 PluginEditor::PluginEditor (PluginProcessor& p)
-    : AudioProcessorEditor (&p), processorRef (p), scopedCallback (p.pluginChanged, [this] { pluginChanged(); })
+    : AudioProcessorEditor (&p), processorRef_ (p), scopedCallback_ (p.pluginChanged_, [this] { pluginChanged(); })
 {
-    loader = std::make_unique<PluginLoaderComponent> (p.pluginFormatManager, p.pluginList, [&p] (const juce::PluginDescription& pd, EditorStyle editorStyle) {
+    loader_ = std::make_unique<PluginLoaderComponent> (p.pluginFormatManager_, p.pluginList_, [&p] (const juce::PluginDescription& pd, EditorStyle editorStyle) {
         p.setNewPlugin (pd, editorStyle);
     });
 
     setSize (500, 500);
     setResizable (false, false);
-    addAndMakeVisible (closeButton);
-    addAndMakeVisible (loader.get());
+    addAndMakeVisible (closeButton_);
+    addAndMakeVisible (loader_.get());
 
-    p.pluginChanged();
+    p.pluginChanged_();
 
-    closeButton.onClick = [this] { clearPlugin(); };
+    closeButton_.onClick = [this] { clearPlugin(); };
 
-    addAndMakeVisible (inspectButton);
+    addAndMakeVisible (inspectButton_);
 
     // this chunk of code instantiates and opens the melatonin inspector
-    inspectButton.onClick = [&] {
-        if (!inspector)
+    inspectButton_.onClick = [&] {
+        if (!inspector_)
         {
-            inspector = std::make_unique<melatonin::Inspector> (*this);
-            inspector->onClose = [this]() { inspector.reset(); };
+            inspector_ = std::make_unique<melatonin::Inspector> (*this);
+            inspector_->onClose = [this]() { inspector_.reset(); };
         }
 
-        inspector->setVisible (true);
+        inspector_->setVisible (true);
     };
 }
 
@@ -198,26 +202,26 @@ void PluginEditor::resized()
     // area.removeFromBottom (50);
     // inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre (100, 50));
 
-    closeButton.setBounds (getLocalBounds().withSizeKeepingCentre (200, buttonHeight));
-    loader->setBounds (getLocalBounds());
+    closeButton_.setBounds (getLocalBounds().withSizeKeepingCentre (200, buttonHeight));
+    loader_->setBounds (getLocalBounds());
 }
 
 void PluginEditor::childBoundsChanged ([[maybe_unused]] Component* child)
 {
-    const auto size = editor != nullptr ? editor->getLocalBounds()
-                                        : juce::Rectangle<int>();
+    const auto size = editor_ != nullptr ? editor_->getLocalBounds()
+                                         : juce::Rectangle<int>();
 
     setSize (size.getWidth(), size.getHeight());
 }
 
 void PluginEditor::setScaleFactor (float scale)
 {
-    currentScaleFactor = scale;
+    currentScaleFactor_ = scale;
     AudioProcessorEditor::setScaleFactor (scale);
 
     [[maybe_unused]] const auto posted = juce::MessageManager::callAsync ([ref = SafePointer<PluginEditor> (this), scale] {
         if (auto* r = ref.getComponent())
-            if (auto* e = r->currentEditorComponent)
+            if (auto* e = r->currentEditorComponent_)
                 e->setScaleFactor (scale);
     });
 
@@ -226,21 +230,21 @@ void PluginEditor::setScaleFactor (float scale)
 
 void PluginEditor::pluginChanged()
 {
-    loader->setVisible (!processorRef.isPluginLoaded());
-    closeButton.setVisible (processorRef.isPluginLoaded());
+    loader_->setVisible (!processorRef_.isPluginLoaded());
+    closeButton_.setVisible (processorRef_.isPluginLoaded());
 
-    if (processorRef.isPluginLoaded())
+    if (processorRef_.isPluginLoaded())
     {
-        auto editorComponent = std::make_unique<PluginEditorComponent> (processorRef.createInnerEditor(), [this] {
+        auto editorComponent = std::make_unique<PluginEditorComponent> (processorRef_.createInnerEditor(), [this] {
             [[maybe_unused]] const auto posted = juce::MessageManager::callAsync ([this] { clearPlugin(); });
             jassert (posted);
         });
 
-        editorComponent->setScaleFactor (currentScaleFactor);
-        currentEditorComponent = editorComponent.get();
+        editorComponent->setScaleFactor (currentScaleFactor_);
+        currentEditorComponent_ = editorComponent.get();
 
-        editor = [&]() -> std::unique_ptr<Component> {
-            switch (processorRef.getEditorStyle())
+        editor_ = [&]() -> std::unique_ptr<Component> {
+            switch (processorRef_.getEditorStyle())
             {
                 case EditorStyle::thisWindow:
                     addAndMakeVisible (editorComponent.get());
@@ -249,7 +253,7 @@ void PluginEditor::pluginChanged()
 
                 case EditorStyle::newWindow:
                     const auto bg = getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker();
-                    auto window = std::make_unique<ScaledDocumentWindow> (bg, currentScaleFactor);
+                    auto window = std::make_unique<ScaledDocumentWindow> (bg, currentScaleFactor_);
                     window->setAlwaysOnTop (true);
                     window->setContentOwned (editorComponent.release(), true);
                     window->centreAroundComponent (this, window->getWidth(), window->getHeight());
@@ -263,14 +267,14 @@ void PluginEditor::pluginChanged()
     }
     else
     {
-        editor = nullptr;
+        editor_ = nullptr;
         setSize (500, 500);
     }
 }
 
 void PluginEditor::clearPlugin()
 {
-    currentEditorComponent = nullptr;
-    editor = nullptr;
-    processorRef.clearPlugin();
+    currentEditorComponent_ = nullptr;
+    editor_ = nullptr;
+    processorRef_.clearPlugin();
 }

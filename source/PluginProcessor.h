@@ -9,7 +9,7 @@
 enum class EditorStyle { thisWindow,
     newWindow };
 
-class PluginProcessor : public juce::AudioProcessor, private juce::ChangeListener
+class PluginProcessor : public juce::AudioProcessor, private juce::ChangeListener, private juce::AudioProcessorListener
 {
 public:
     PluginProcessor();
@@ -48,33 +48,39 @@ public:
 
     void clearPlugin()
     {
-        const juce::ScopedLock sl (innerMutex);
+        const juce::ScopedLock sl (innerMutex_);
 
-        inner = nullptr;
-        juce::NullCheckedInvocation::invoke (pluginChanged);
+        inner_ = nullptr;
+        juce::NullCheckedInvocation::invoke (pluginChanged_);
     }
 
     bool isPluginLoaded() const
     {
-        const juce::ScopedLock sl (innerMutex);
-        return inner != nullptr;
+        const juce::ScopedLock sl (innerMutex_);
+        return inner_ != nullptr;
     }
 
     std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const
     {
-        const juce::ScopedLock sl (innerMutex);
-        return rawToUniquePtr (inner->hasEditor() ? inner->createEditorIfNeeded() : nullptr);
+        const juce::ScopedLock sl (innerMutex_);
+        return rawToUniquePtr (inner_->hasEditor() ? inner_->createEditorIfNeeded() : nullptr);
     }
 
     EditorStyle getEditorStyle() const noexcept
     {
-        return editorStyle;
+        return editorStyle_;
     }
 
-    juce::ApplicationProperties appProperties;
-    juce::AudioPluginFormatManager pluginFormatManager;
-    juce::KnownPluginList pluginList;
-    std::function<void()> pluginChanged;
+    // juce::AudioProcessorListener
+    void audioProcessorParameterChanged (AudioProcessor* processor,
+        int parameterIndex,
+        float newValue) override;
+    void audioProcessorChanged (AudioProcessor* processor, const ChangeDetails& details) override;
+
+    juce::ApplicationProperties appProperties_;
+    juce::AudioPluginFormatManager pluginFormatManager_;
+    juce::KnownPluginList pluginList_;
+    std::function<void()> pluginChanged_;
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
@@ -82,12 +88,14 @@ private:
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 
-    juce::CriticalSection innerMutex;
-    std::unique_ptr<juce::AudioPluginInstance> inner;
-    EditorStyle editorStyle = EditorStyle {};
-    bool active = false;
-    juce::ScopedMessageBox messageBox;
+    juce::CriticalSection innerMutex_;
+    std::unique_ptr<juce::AudioPluginInstance> inner_;
+    EditorStyle editorStyle_ = EditorStyle {};
+    bool active_ = false;
+    juce::ScopedMessageBox messageBox_;
 
-    static constexpr const char* innerStateTag = "inner_state";
-    static constexpr const char* editorStyleTag = "editor_style";
+    juce::AudioBuffer<float> float_process_buffer_;
+    juce::AudioProcessorValueTreeState apvts_;
+
+    int group_ { 0 };
 };

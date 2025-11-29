@@ -1,3 +1,5 @@
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 cmake_minimum_required(VERSION 3.25)
 
 # This tells cmake we have goodies in the /cmake folder
@@ -83,7 +85,7 @@ juce_add_plugin("${PROJECT_NAME}"
     # This can be different from PROJECT_NAME and can have spaces!
     # You might want to use v${MAJOR_VERSION} here once you go to v2...
     PRODUCT_NAME "${PRODUCT_NAME}"
-    
+
     PLUGINHOST_AU TRUE
     PLUGINHOST_LV2 TRUE
     PLUGINHOST_VST3 TRUE)
