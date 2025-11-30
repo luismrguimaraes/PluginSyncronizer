@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SharedData.hpp"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #if (MSVC)
@@ -9,7 +10,7 @@
 enum class EditorStyle { thisWindow,
     newWindow };
 
-class PluginProcessor : public juce::AudioProcessor, private juce::ChangeListener, private juce::AudioProcessorListener
+class PluginProcessor : public juce::AudioProcessor, public SharedData::Listener, private juce::ChangeListener, private juce::AudioProcessorListener
 {
 public:
     PluginProcessor();
@@ -44,6 +45,7 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    void setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
     void setNewPlugin (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
     void clearPlugin()
@@ -77,6 +79,9 @@ public:
         float newValue) override;
     void audioProcessorChanged (AudioProcessor* processor, const ChangeDetails& details) override;
 
+    void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
+
+public:
     juce::ApplicationProperties appProperties_;
     juce::AudioPluginFormatManager pluginFormatManager_;
     juce::KnownPluginList pluginList_;
@@ -90,6 +95,7 @@ private:
 
     juce::CriticalSection innerMutex_;
     std::unique_ptr<juce::AudioPluginInstance> inner_;
+    juce::PluginDescription inner_plugin_description_;
     EditorStyle editorStyle_ = EditorStyle {};
     bool active_ = false;
     juce::ScopedMessageBox messageBox_;
@@ -98,4 +104,6 @@ private:
     juce::AudioProcessorValueTreeState apvts_;
 
     int group_ { 0 };
+
+    SharedDataManager shared_data_manager_;
 };

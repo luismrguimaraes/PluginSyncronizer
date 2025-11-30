@@ -2,6 +2,8 @@
 #include "PluginEditor.h"
 #include "juce_core/system/juce_PlatformDefs.h"
 #include <__algorithm/ranges_transform.h>
+#include <algorithm>
+#include <cstddef>
 #include <locale>
 #include <memory>
 #include <tuple>
@@ -43,10 +45,13 @@ PluginProcessor::PluginProcessor()
 
     juce::MessageManagerLock lock;
     pluginList_.addChangeListener (this);
+
+    shared_data_manager_.addListener (this);
 }
 
 PluginProcessor::~PluginProcessor()
 {
+    shared_data_manager_.removeListener (this);
 }
 
 //==============================================================================
@@ -229,6 +234,8 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
         }());
     }
 
+    xml.writeTo (juce::File { "~/Desktop/test.xml" });
+
     const auto text = xml.toString();
     destData.replaceAll (text.toRawUTF8(), text.getNumBytesAsUTF8());
 
@@ -266,12 +273,15 @@ void PluginProcessor::audioProcessorParameterChanged (AudioProcessor* processor,
     int parameterIndex,
     float newValue)
 {
+    if (processor != inner_.get())
+        return;
+
     // auto& tree = inner_->getParameterTree();
     // for (auto param : tree.getParameters (false))
     // {
     //     std::cout << param->getLabel() << " " << param->getName (40) << "\n";
     // }
-    return;
+    //
 }
 
 void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const ChangeDetails& details)
@@ -279,11 +289,19 @@ void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const Ch
     return;
 }
 
-void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb)
+void PluginProcessor::loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block)
+{
+    if (plugin_description.isDuplicateOf (inner_plugin_description_))
+        return;
+
+    setNewPlugin (plugin_description, state_memory_block);
+}
+
+void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
 {
     const juce::ScopedLock sl (innerMutex_);
 
-    const auto callback = [this, where, mb] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
+    const auto callback = [this, mb, pd] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         if (error.isNotEmpty())
         {
             auto options = juce::MessageBoxOptions::makeOptionsOk (juce::MessageBoxIconType::WarningIcon,
@@ -294,8 +312,8 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, EditorSty
         }
 
         inner_ = std::move (instance);
-
-        editorStyle_ = where;
+        editorStyle_ = EditorStyle::newWindow;
+        inner_plugin_description_ = pd;
 
         if (inner_ != nullptr && !mb.isEmpty())
             inner_->setStateInformation (mb.getData(), (int) mb.getSize());
@@ -320,8 +338,33 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, EditorSty
 
         juce::NullCheckedInvocation::invoke (pluginChanged_);
     };
-
     pluginFormatManager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback);
+}
+
+void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, [[maybe_unused]] EditorStyle where, const juce::MemoryBlock& mb)
+{
+    const juce::ScopedLock sl (innerMutex_);
+
+    const auto callback_for_shared_instance = [this, mb, pd] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
+        if (error.isNotEmpty())
+        {
+            return;
+        }
+
+        if (instance != nullptr && !mb.isEmpty())
+            instance->setStateInformation (mb.getData(), (int) mb.getSize());
+
+        if (active_)
+        {
+            instance->setRateAndBufferSizeDetails (getSampleRate(), getBlockSize());
+            instance->prepareToPlay (getSampleRate(), getBlockSize());
+        }
+
+        instance->addListener (this);
+        shared_data_manager_.updateInner (std::move (instance), pd);
+    };
+
+    pluginFormatManager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);
 }
 
 void PluginProcessor::changeListenerCallback (juce::ChangeBroadcaster* source)
