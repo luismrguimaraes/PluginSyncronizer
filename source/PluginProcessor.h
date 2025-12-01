@@ -48,11 +48,16 @@ public:
     void setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
     void setNewPlugin (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
-    void clearPlugin()
+    void clearPlugin() override
     {
         const juce::ScopedLock sl (innerMutex_);
 
-        inner_ = nullptr;
+        if (inner_ == nullptr)
+            return;
+
+        inner_ = nullptr; // editor will be deleted when pluginChanged_ is called
+        inner_plugin_description_.reset();
+        shared_data_manager_.removeInner();
         juce::NullCheckedInvocation::invoke (pluginChanged_);
     }
 
@@ -95,7 +100,7 @@ private:
 
     juce::CriticalSection innerMutex_;
     std::unique_ptr<juce::AudioPluginInstance> inner_;
-    juce::PluginDescription inner_plugin_description_;
+    std::optional<juce::PluginDescription> inner_plugin_description_;
     EditorStyle editorStyle_ = EditorStyle {};
     bool active_ = false;
     juce::ScopedMessageBox messageBox_;

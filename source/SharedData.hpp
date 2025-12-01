@@ -11,12 +11,13 @@ struct SharedData
     struct Listener
     {
         virtual void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& memory_block) = 0;
+        virtual void clearPlugin() = 0;
     };
 
-    std::unique_ptr<juce::AudioPluginInstance> inner_;
-    juce::PluginDescription plugin_description_;
+    std::unique_ptr<juce::AudioPluginInstance> inner;
+    std::optional<juce::PluginDescription> plugin_description;
 
-    std::vector<SharedData::Listener*> listeners_;
+    std::vector<SharedData::Listener*> listeners;
 };
 
 class SharedDataManager
@@ -24,45 +25,20 @@ class SharedDataManager
 public:
     SharedDataManager()
     {
-        shared_data_->listeners_.reserve (10);
+        shared_data_->listeners.reserve (10);
     }
 
-    void addListener (SharedData::Listener* new_listener)
-    {
-        if (std::ranges::find (shared_data_->listeners_, new_listener) == shared_data_->listeners_.end())
-        {
-            shared_data_->listeners_.push_back (new_listener);
-        }
-    }
+    void addListener (SharedData::Listener* new_listener);
 
-    void removeListener (SharedData::Listener* listener_to_remove)
-    {
-        auto it = std::ranges::find (shared_data_->listeners_, listener_to_remove);
-        if (it != shared_data_->listeners_.end())
-        {
-            shared_data_->listeners_.erase (it);
-        }
-    }
+    void removeListener (SharedData::Listener* listener_to_remove);
 
-    void updateInner (std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd)
-    {
-        if (pd.isDuplicateOf (shared_data_->plugin_description_))
-            return;
+    void updateInner (std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd);
 
-        shared_data_->inner_ = std::move (inner);
-        shared_data_->plugin_description_ = pd;
-
-        juce::MemoryBlock state_memory_block;
-        shared_data_->inner_->getStateInformation (state_memory_block);
-
-        for (auto& listener : shared_data_->listeners_)
-        {
-            listener->loadInnerState (shared_data_->plugin_description_, state_memory_block);
-        }
-    }
+    void removeInner();
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SharedDataManager)
 
+    juce::CriticalSection inner_mutex_;
     juce::SharedResourcePointer<SharedData> shared_data_ {};
 };

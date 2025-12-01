@@ -38,7 +38,7 @@ PluginProcessor::PluginProcessor()
         return opt;
     }());
 
-    pluginFormatManager_.addDefaultFormats();
+    juce::addDefaultFormatsToManager (pluginFormatManager_);
 
     if (auto savedPluginList = appProperties_.getUserSettings()->getXmlValue ("pluginList_"))
         pluginList_.recreateFromXml (*savedPluginList);
@@ -291,8 +291,11 @@ void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const Ch
 
 void PluginProcessor::loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block)
 {
-    if (plugin_description.isDuplicateOf (inner_plugin_description_))
+    if (inner_plugin_description_.has_value() && plugin_description.isDuplicateOf (inner_plugin_description_.value()))
+    {
+        jassert (inner_ == nullptr);
         return;
+    }
 
     setNewPlugin (plugin_description, state_memory_block);
 }
