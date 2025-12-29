@@ -307,37 +307,38 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juc
     const auto callback = [this, mb, pd] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         if (error.isNotEmpty())
         {
-            auto options = juce::MessageBoxOptions::makeOptionsOk (juce::MessageBoxIconType::WarningIcon,
-                "Plugin Load Failed",
-                error);
-            messageBox_ = juce::AlertWindow::showScopedAsync (options, nullptr);
             return;
         }
 
-        inner_ = std::move (instance);
         editorStyle_ = EditorStyle::newWindow;
         inner_plugin_description_ = pd;
 
-        if (inner_ != nullptr && !mb.isEmpty())
-            inner_->setStateInformation (mb.getData(), (int) mb.getSize());
+        if (instance != nullptr && !mb.isEmpty())
+            instance->setStateInformation (mb.getData(), (int) mb.getSize());
 
-        // In a 'real' plugin, we'd also need to set the bus configuration of the inner_ plugin.
+        // In a 'real' plugin, we'd also need to set the bus configuration of the instance plugin.
         // One possibility would be to match the bus configuration of the wrapper plugin, but
-        // the inner_ plugin isn't guaranteed to support the same layout. Alternatively, we
+        // the instance plugin isn't guaranteed to support the same layout. Alternatively, we
         // could try to apply a reasonably similar layout, and maintain a mapping between the
-        // inner_/outer channel layouts.
+        // instance/outer channel layouts.
         //
-        // In any case, it is essential that the inner_ plugin is told about the bus
-        // configuration that will be used. The AudioBuffer passed to the inner_ plugin must also
+        // In any case, it is essential that the instance plugin is told about the bus
+        // configuration that will be used. The AudioBuffer passed to the instance plugin must also
         // exactly match this layout.
 
         if (active_)
         {
-            inner_->setRateAndBufferSizeDetails (getSampleRate(), getBlockSize());
-            inner_->prepareToPlay (getSampleRate(), getBlockSize());
+            instance->setRateAndBufferSizeDetails (getSampleRate(), getBlockSize());
+            // if (!instance->setBusesLayout (getBusesLayout()))
+            // {
+            //     std::cout << "Layout not supported\n";
+            // }
+            instance->prepareToPlay (getSampleRate(), getBlockSize());
         }
 
-        inner_->addListener (this);
+        instance->addListener (this);
+
+        inner_ = std::move (instance);
 
         juce::NullCheckedInvocation::invoke (pluginChanged_);
     };
@@ -351,6 +352,10 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, [[maybe_u
     const auto callback_for_shared_instance = [this, mb, pd] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         if (error.isNotEmpty())
         {
+            auto options = juce::MessageBoxOptions::makeOptionsOk (juce::MessageBoxIconType::WarningIcon,
+                "Plugin Load Failed",
+                error);
+            messageBox_ = juce::AlertWindow::showScopedAsync (options, nullptr);
             return;
         }
 
@@ -360,6 +365,10 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, [[maybe_u
         if (active_)
         {
             instance->setRateAndBufferSizeDetails (getSampleRate(), getBlockSize());
+            // if (!instance->setBusesLayout (getBusesLayout()))
+            // {
+            //     std::cout << "Layout not supported\n";
+            // }
             instance->prepareToPlay (getSampleRate(), getBlockSize());
         }
 

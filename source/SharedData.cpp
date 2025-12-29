@@ -51,6 +51,6 @@ void SharedDataManager::removeInner()
 
     for (auto& listener : shared_data_->listeners)
     {
-        listener->clearPlugin();
+        listener->removeInner();
     }
 }

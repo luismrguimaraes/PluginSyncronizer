@@ -2,18 +2,21 @@
 
 namespace
 {
-    constexpr auto buttonHeight = 30;
-    constexpr auto margin = 10;
+    constexpr auto kButtonHeight = 30;
+    constexpr auto kMargin = 10;
+
+    constexpr auto kEditorHeight { 500 };
+    constexpr auto kEditorWidth { 750 };
 }
 
 static void doLayout (juce::Component* main, juce::Component& bottom, int bottomHeight, juce::Rectangle<int> bounds)
 {
     juce::Grid grid;
-    grid.setGap (juce::Grid::Px { margin });
+    grid.setGap (juce::Grid::Px { kMargin });
     grid.templateColumns = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
     grid.templateRows = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } },
         juce::Grid::TrackInfo { juce::Grid::Px { bottomHeight } } };
-    grid.items = { juce::GridItem { main }, juce::GridItem { bottom }.withMargin ({ 0, margin, margin, margin }) };
+    grid.items = { juce::GridItem { main }, juce::GridItem { bottom }.withMargin ({ 0, kMargin, kMargin, kMargin }) };
     grid.performLayout (bounds);
 }
 
@@ -66,7 +69,7 @@ private:
         {
             juce::Grid vertical;
             vertical.autoFlow = juce::Grid::AutoFlow::row;
-            vertical.setGap (juce::Grid::Px { margin });
+            vertical.setGap (juce::Grid::Px { kMargin });
             vertical.autoRows = vertical.autoColumns = juce::Grid::TrackInfo { juce::Grid::Fr { 1 } };
             vertical.items.insertMultiple (0, juce::GridItem {}, 2);
             vertical.performLayout (getLocalBounds());
@@ -75,7 +78,7 @@ private:
 
             juce::Grid grid;
             grid.autoFlow = juce::Grid::AutoFlow::column;
-            grid.setGap (juce::Grid::Px { margin });
+            grid.setGap (juce::Grid::Px { kMargin });
             grid.autoRows = grid.autoColumns = juce::Grid::TrackInfo { juce::Grid::Fr { 1 } };
             grid.items = { juce::GridItem { thisWindowButton },
                 juce::GridItem { newWindowButton } };
@@ -115,7 +118,7 @@ public:
 
     void resized() override
     {
-        doLayout (editor.get(), closeButton, buttonHeight, getLocalBounds());
+        doLayout (editor.get(), closeButton, kButtonHeight, getLocalBounds());
     }
 
     void childBoundsChanged (Component* child) override
@@ -126,12 +129,10 @@ public:
         const auto size = editor != nullptr ? editor->getLocalBounds()
                                             : juce::Rectangle<int>();
 
-        setSize (size.getWidth(), margin + buttonHeight + size.getHeight());
+        setSize (size.getWidth(), kMargin + 30 + size.getHeight());
     }
 
 private:
-    static constexpr int buttonHeight { 0 };
-
     std::unique_ptr<juce::AudioProcessorEditor> editor;
     juce::TextButton closeButton { "Close Plugin" };
 };
@@ -141,9 +142,11 @@ class ScaledDocumentWindow final : public juce::DocumentWindow
 {
 public:
     ScaledDocumentWindow (juce::Colour bg, float scale)
-        : DocumentWindow ("Editor", bg, 0), desktopScale (scale) {}
+        : DocumentWindow ("Editor", bg, 4), desktopScale (scale) {}
 
     float getDesktopScaleFactor() const override { return juce::Desktop::getInstance().getGlobalScaleFactor() * desktopScale; }
+
+    void closeButtonPressed() override { setVisible (false); }
 
 private:
     float desktopScale = 1.0f;
@@ -156,14 +159,16 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         p.setNewPlugin (pd, editorStyle);
     });
 
-    setSize (500, 500);
+    setSize (kEditorWidth, kEditorHeight);
     setResizable (false, false);
     addAndMakeVisible (closeButton_);
+    addAndMakeVisible (showButton_);
     addAndMakeVisible (loader_.get());
 
     p.pluginChanged_();
 
     closeButton_.onClick = [this] { clearPlugin(); };
+    showButton_.onClick = [this] { editor_->setVisible (true); };
 
     addAndMakeVisible (inspectButton_);
 
@@ -202,16 +207,18 @@ void PluginEditor::resized()
     // area.removeFromBottom (50);
     // inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre (100, 50));
 
-    closeButton_.setBounds (getLocalBounds().withSizeKeepingCentre (200, buttonHeight));
+    auto area_if_centered = getLocalBounds().withSizeKeepingCentre (200, kButtonHeight);
+    closeButton_.setBounds (area_if_centered.withY (area_if_centered.getY() - kButtonHeight));
+    showButton_.setBounds (area_if_centered.withY (area_if_centered.getY() + kButtonHeight));
     loader_->setBounds (getLocalBounds());
 }
 
 void PluginEditor::childBoundsChanged ([[maybe_unused]] Component* child)
 {
-    const auto size = editor_ != nullptr ? editor_->getLocalBounds()
-                                         : juce::Rectangle<int>();
+    const auto bounds = editor_ != nullptr ? editor_->getLocalBounds()
+                                           : juce::Rectangle<int>();
 
-    setSize (size.getWidth(), size.getHeight());
+    setSize (bounds.getWidth(), bounds.getHeight());
 }
 
 void PluginEditor::setScaleFactor (float scale)
@@ -232,6 +239,7 @@ void PluginEditor::pluginChanged()
 {
     loader_->setVisible (!processorRef_.isPluginLoaded());
     closeButton_.setVisible (processorRef_.isPluginLoaded());
+    showButton_.setVisible (processorRef_.isPluginLoaded());
 
     if (processorRef_.isPluginLoaded())
     {
@@ -258,6 +266,7 @@ void PluginEditor::pluginChanged()
                     window->setContentOwned (editorComponent.release(), true);
                     window->centreAroundComponent (this, window->getWidth(), window->getHeight());
                     window->setVisible (true);
+                    window->setUsingNativeTitleBar (true);
                     return window;
             }
 
@@ -268,7 +277,7 @@ void PluginEditor::pluginChanged()
     else
     {
         editor_ = nullptr;
-        setSize (500, 500);
+        setSize (kEditorWidth, kEditorHeight);
     }
 }
 
@@ -276,5 +285,5 @@ void PluginEditor::clearPlugin()
 {
     currentEditorComponent_ = nullptr;
     editor_ = nullptr;
-    processorRef_.clearPlugin();
+    processorRef_.removeInner();
 }

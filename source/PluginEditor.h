@@ -37,6 +37,7 @@ private:
     float currentScaleFactor_ { 1.0f };
 
     juce::TextButton closeButton_ { "Close Plugin" };
+    juce::TextButton showButton_ { "Show Plugin" };
     juce::TextButton inspectButton_ { "Inspect the UI" };
 
     PluginEditorComponent* currentEditorComponent_ = nullptr;

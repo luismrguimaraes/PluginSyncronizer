@@ -48,7 +48,7 @@ public:
     void setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
     void setNewPlugin (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
-    void clearPlugin() override
+    void removeInner() override
     {
         const juce::ScopedLock sl (innerMutex_);
 

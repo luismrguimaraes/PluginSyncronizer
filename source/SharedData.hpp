@@ -11,7 +11,7 @@ struct SharedData
     struct Listener
     {
         virtual void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& memory_block) = 0;
-        virtual void clearPlugin() = 0;
+        virtual void removeInner() = 0;
     };
 
     std::unique_ptr<juce::AudioPluginInstance> inner;
