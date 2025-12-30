@@ -38,7 +38,8 @@ private:
 
     juce::TextButton closeButton_ { "Close Plugin" };
     juce::TextButton showButton_ { "Show Plugin" };
+    juce::TextButton syncButton_ { "Sync" };
     juce::TextButton inspectButton_ { "Inspect the UI" };
 
-    PluginEditorComponent* currentEditorComponent_ = nullptr;
+    PluginEditorComponent* innerEditorComponent_ = nullptr;
 };

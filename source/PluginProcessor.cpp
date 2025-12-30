@@ -258,7 +258,7 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
         juce::MemoryBlock innerState;
         innerState.fromBase64Encoding (xml->getChildElementAllSubText (innerStateTag, {}));
 
-        setNewPlugin (pd,
+        createSharedPluginInstance (pd,
             (EditorStyle) xml->getIntAttribute (editorStyleTag, 0),
             innerState);
 
@@ -289,15 +289,39 @@ void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const Ch
     return;
 }
 
-void PluginProcessor::loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block)
+void PluginProcessor::syncInners()
+{
+    juce::MemoryBlock mb;
+    inner_->getStateInformation (mb);
+    shared_data_manager_.updateInnerState (mb);
+}
+
+void PluginProcessor::loadInner (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block)
 {
     if (inner_plugin_description_.has_value() && plugin_description.isDuplicateOf (inner_plugin_description_.value()))
     {
-        jassert (inner_ == nullptr);
+        jassert (inner_ != nullptr);
         return;
     }
 
     setNewPlugin (plugin_description, state_memory_block);
+}
+
+void PluginProcessor::loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block)
+{
+    if (!state_memory_block.isEmpty())
+    {
+        if (!inner_plugin_description_.has_value())
+        {
+            setNewPlugin (plugin_description, state_memory_block);
+        }
+        else
+        {
+            jassert (plugin_description.isDuplicateOf (inner_plugin_description_.value()));
+            jassert (inner_ != nullptr);
+            inner_->setStateInformation (state_memory_block.getData(), (int) state_memory_block.getSize());
+        }
+    }
 }
 
 void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
@@ -313,7 +337,8 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juc
         editorStyle_ = EditorStyle::newWindow;
         inner_plugin_description_ = pd;
 
-        if (instance != nullptr && !mb.isEmpty())
+        jassert (instance != nullptr);
+        if (!mb.isEmpty())
             instance->setStateInformation (mb.getData(), (int) mb.getSize());
 
         // In a 'real' plugin, we'd also need to set the bus configuration of the instance plugin.
@@ -342,10 +367,11 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juc
 
         juce::NullCheckedInvocation::invoke (pluginChanged_);
     };
+
     pluginFormatManager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback);
 }
 
-void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, [[maybe_unused]] EditorStyle where, const juce::MemoryBlock& mb)
+void PluginProcessor::createSharedPluginInstance (const juce::PluginDescription& pd, [[maybe_unused]] EditorStyle where, const juce::MemoryBlock& mb)
 {
     const juce::ScopedLock sl (innerMutex_);
 
@@ -377,6 +403,36 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, [[maybe_u
     };
 
     pluginFormatManager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);
+}
+
+void PluginProcessor::removeInner()
+{
+    const juce::ScopedLock sl (innerMutex_);
+
+    if (inner_ == nullptr)
+        return;
+
+    inner_ = nullptr; // editor will be deleted when pluginChanged_ is called
+    inner_plugin_description_.reset();
+    shared_data_manager_.removeInner();
+    juce::NullCheckedInvocation::invoke (pluginChanged_);
+}
+
+bool PluginProcessor::isPluginLoaded() const
+{
+    const juce::ScopedLock sl (innerMutex_);
+    return inner_ != nullptr;
+}
+
+std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor() const
+{
+    const juce::ScopedLock sl (innerMutex_);
+    return rawToUniquePtr (inner_->hasEditor() ? inner_->createEditorIfNeeded() : nullptr);
+}
+
+EditorStyle PluginProcessor::getEditorStyle() const noexcept
+{
+    return editorStyle_;
 }
 
 void PluginProcessor::changeListenerCallback (juce::ChangeBroadcaster* source)

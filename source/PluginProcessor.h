@@ -46,37 +46,15 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     void setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
-    void setNewPlugin (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
+    void createSharedPluginInstance (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
-    void removeInner() override
-    {
-        const juce::ScopedLock sl (innerMutex_);
+    void removeInner() override;
 
-        if (inner_ == nullptr)
-            return;
+    bool isPluginLoaded() const;
 
-        inner_ = nullptr; // editor will be deleted when pluginChanged_ is called
-        inner_plugin_description_.reset();
-        shared_data_manager_.removeInner();
-        juce::NullCheckedInvocation::invoke (pluginChanged_);
-    }
+    std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const;
 
-    bool isPluginLoaded() const
-    {
-        const juce::ScopedLock sl (innerMutex_);
-        return inner_ != nullptr;
-    }
-
-    std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const
-    {
-        const juce::ScopedLock sl (innerMutex_);
-        return rawToUniquePtr (inner_->hasEditor() ? inner_->createEditorIfNeeded() : nullptr);
-    }
-
-    EditorStyle getEditorStyle() const noexcept
-    {
-        return editorStyle_;
-    }
+    EditorStyle getEditorStyle() const noexcept;
 
     // juce::AudioProcessorListener
     void audioProcessorParameterChanged (AudioProcessor* processor,
@@ -84,7 +62,10 @@ public:
         float newValue) override;
     void audioProcessorChanged (AudioProcessor* processor, const ChangeDetails& details) override;
 
+    void loadInner (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
     void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
+
+    void syncInners();
 
 public:
     juce::ApplicationProperties appProperties_;

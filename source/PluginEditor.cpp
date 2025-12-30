@@ -129,7 +129,7 @@ public:
         const auto size = editor != nullptr ? editor->getLocalBounds()
                                             : juce::Rectangle<int>();
 
-        setSize (size.getWidth(), kMargin + 30 + size.getHeight());
+        setSize (size.getWidth(), 40 + size.getHeight());
     }
 
 private:
@@ -156,19 +156,21 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processorRef_ (p), scopedCallback_ (p.pluginChanged_, [this] { pluginChanged(); })
 {
     loader_ = std::make_unique<PluginLoaderComponent> (p.pluginFormatManager_, p.pluginList_, [&p] (const juce::PluginDescription& pd, EditorStyle editorStyle) {
-        p.setNewPlugin (pd, editorStyle);
+        p.createSharedPluginInstance (pd, editorStyle);
     });
 
     setSize (kEditorWidth, kEditorHeight);
     setResizable (false, false);
     addAndMakeVisible (closeButton_);
     addAndMakeVisible (showButton_);
+    addAndMakeVisible (syncButton_);
     addAndMakeVisible (loader_.get());
 
     p.pluginChanged_();
 
     closeButton_.onClick = [this] { clearPlugin(); };
     showButton_.onClick = [this] { editor_->setVisible (true); };
+    syncButton_.onClick = [this] { processorRef_.syncInners(); };
 
     addAndMakeVisible (inspectButton_);
 
@@ -210,6 +212,7 @@ void PluginEditor::resized()
     auto area_if_centered = getLocalBounds().withSizeKeepingCentre (200, kButtonHeight);
     closeButton_.setBounds (area_if_centered.withY (area_if_centered.getY() - kButtonHeight));
     showButton_.setBounds (area_if_centered.withY (area_if_centered.getY() + kButtonHeight));
+    syncButton_.setBounds (area_if_centered.withY (area_if_centered.getY() + 2 * kButtonHeight));
     loader_->setBounds (getLocalBounds());
 }
 
@@ -228,7 +231,7 @@ void PluginEditor::setScaleFactor (float scale)
 
     [[maybe_unused]] const auto posted = juce::MessageManager::callAsync ([ref = SafePointer<PluginEditor> (this), scale] {
         if (auto* r = ref.getComponent())
-            if (auto* e = r->currentEditorComponent_)
+            if (auto* e = r->innerEditorComponent_)
                 e->setScaleFactor (scale);
     });
 
@@ -240,6 +243,7 @@ void PluginEditor::pluginChanged()
     loader_->setVisible (!processorRef_.isPluginLoaded());
     closeButton_.setVisible (processorRef_.isPluginLoaded());
     showButton_.setVisible (processorRef_.isPluginLoaded());
+    syncButton_.setVisible (processorRef_.isPluginLoaded());
 
     if (processorRef_.isPluginLoaded())
     {
@@ -249,7 +253,7 @@ void PluginEditor::pluginChanged()
         });
 
         editorComponent->setScaleFactor (currentScaleFactor_);
-        currentEditorComponent_ = editorComponent.get();
+        innerEditorComponent_ = editorComponent.get();
 
         editor_ = [&]() -> std::unique_ptr<Component> {
             switch (processorRef_.getEditorStyle())
@@ -283,7 +287,7 @@ void PluginEditor::pluginChanged()
 
 void PluginEditor::clearPlugin()
 {
-    currentEditorComponent_ = nullptr;
+    innerEditorComponent_ = nullptr;
     editor_ = nullptr;
     processorRef_.removeInner();
 }

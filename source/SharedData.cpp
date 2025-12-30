@@ -23,7 +23,7 @@ void SharedDataManager::updateInner (std::unique_ptr<juce::AudioPluginInstance> 
 
     if (shared_data_->plugin_description.has_value() && pd.isDuplicateOf (shared_data_->plugin_description.value()))
     {
-        jassert (shared_data_->inner == nullptr);
+        jassert (shared_data_->inner != nullptr);
         return;
     }
 
@@ -33,6 +33,15 @@ void SharedDataManager::updateInner (std::unique_ptr<juce::AudioPluginInstance> 
     juce::MemoryBlock state_memory_block;
     shared_data_->inner->getStateInformation (state_memory_block);
 
+    for (auto& listener : shared_data_->listeners)
+    {
+        listener->loadInner (shared_data_->plugin_description.value(), state_memory_block);
+    }
+}
+
+void SharedDataManager::updateInnerState (juce::MemoryBlock state_memory_block)
+{
+    jassert (shared_data_->plugin_description.has_value());
     for (auto& listener : shared_data_->listeners)
     {
         listener->loadInnerState (shared_data_->plugin_description.value(), state_memory_block);
