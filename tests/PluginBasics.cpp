@@ -15,16 +15,15 @@ TEST_CASE ("Plugin instance", "[instance]")
     SECTION ("name")
     {
         CHECK_THAT (testPlugin.getName().toStdString(),
-            Catch::Matchers::Equals ("Plugin Host"));
+            Catch::Matchers::Equals ("Pamplejuce Demo"));
     }
 }
-
 
 #ifdef PAMPLEJUCE_IPP
     #include <ipp.h>
 
 TEST_CASE ("IPP version", "[ipp]")
 {
-    CHECK_THAT (ippsGetLibVersion()->Version, Catch::Matchers::Equals ("2022.0.0 (r0x131e93b0)"));
+    CHECK_THAT (ippsGetLibVersion()->Version, Catch::Matchers::Equals ("2022.2.0 (r0x42db1a66)"));
 }
 #endif
