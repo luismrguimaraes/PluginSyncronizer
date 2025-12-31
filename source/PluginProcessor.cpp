@@ -1,7 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "juce_core/system/juce_PlatformDefs.h"
-#include <__algorithm/ranges_transform.h>
 #include <algorithm>
 #include <cstddef>
 #include <locale>
@@ -284,7 +283,7 @@ void PluginProcessor::audioProcessorParameterChanged (AudioProcessor* processor,
     //
 }
 
-void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const ChangeDetails& details)
+void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details)
 {
     return;
 }

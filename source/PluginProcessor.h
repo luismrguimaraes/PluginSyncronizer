@@ -60,7 +60,7 @@ public:
     void audioProcessorParameterChanged (AudioProcessor* processor,
         int parameterIndex,
         float newValue) override;
-    void audioProcessorChanged (AudioProcessor* processor, const ChangeDetails& details) override;
+    void audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details) override;
 
     void loadInner (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
     void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
