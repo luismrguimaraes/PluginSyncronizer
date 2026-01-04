@@ -27,7 +27,7 @@ public:
     PluginLoaderComponent (juce::AudioPluginFormatManager& manager,
         juce::KnownPluginList& list,
         Callback&& callback)
-        : pluginListComponent (manager, list, {}, {})
+        : pluginListComponent (manager, list, juce::File { "~/Desktop/deadMansFile.txt" }, {})
     {
         pluginListComponent.getTableListBox().setMultipleSelectionEnabled (false);
 
