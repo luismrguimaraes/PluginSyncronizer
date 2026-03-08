@@ -25,7 +25,7 @@ PluginProcessor::PluginProcessor()
             ),
       apvts_ (*this, nullptr)
 {
-    appProperties_.setStorageParameters ([&] {
+    app_properties_.setStorageParameters ([&] {
         juce::PropertiesFile::Options opt;
         opt.applicationName = getName();
         opt.commonToAllUsers = false;
@@ -37,13 +37,13 @@ PluginProcessor::PluginProcessor()
         return opt;
     }());
 
-    juce::addDefaultFormatsToManager (pluginFormatManager_);
+    juce::addDefaultFormatsToManager (plugin_format_manager_);
 
-    if (auto savedPluginList = appProperties_.getUserSettings()->getXmlValue ("pluginList_"))
-        pluginList_.recreateFromXml (*savedPluginList);
+    if (auto savedPluginList = app_properties_.getUserSettings()->getXmlValue ("pluginList_"))
+        plugin_list_.recreateFromXml (*savedPluginList);
 
     juce::MessageManagerLock lock;
-    pluginList_.addChangeListener (this);
+    plugin_list_.addChangeListener (this);
 
     shared_data_manager_.addListener (this);
 }
@@ -121,7 +121,7 @@ void PluginProcessor::changeProgramName (int index, const juce::String& newName)
 //==============================================================================
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     active_ = true;
 
@@ -140,7 +140,7 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
 void PluginProcessor::releaseResources()
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     active_ = false;
 
@@ -152,7 +152,7 @@ void PluginProcessor::releaseResources()
 
 void PluginProcessor::reset()
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     if (inner_ != nullptr)
         inner_->reset();
@@ -211,7 +211,7 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
 //==============================================================================
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     juce::XmlElement xml ("state");
 
@@ -221,7 +221,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 
     if (inner_ != nullptr)
     {
-        xml.setAttribute (editorStyleTag, (int) editorStyle_);
+        xml.setAttribute (editorStyleTag, (int) editor_style_);
         xml.addChildElement (inner_->getPluginDescription().createXml().release());
         xml.addChildElement ([this] {
             juce::MemoryBlock innerState;
@@ -245,7 +245,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 
 void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     auto xml = juce::XmlDocument::parse (juce::String (juce::CharPointer_UTF8 (static_cast<const char*> (data)), (size_t) sizeInBytes));
 
@@ -325,7 +325,7 @@ void PluginProcessor::loadInnerState (const juce::PluginDescription& plugin_desc
 
 void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     const auto callback = [this, mb, pd] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         if (error.isNotEmpty())
@@ -333,7 +333,7 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juc
             return;
         }
 
-        editorStyle_ = EditorStyle::newWindow;
+        editor_style_ = EditorStyle::newWindow;
         inner_plugin_description_ = pd;
 
         jassert (instance != nullptr);
@@ -364,15 +364,15 @@ void PluginProcessor::setNewPlugin (const juce::PluginDescription& pd, const juc
 
         inner_ = std::move (instance);
 
-        juce::NullCheckedInvocation::invoke (pluginChanged_);
+        juce::NullCheckedInvocation::invoke (plugin_changed_);
     };
 
-    pluginFormatManager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback);
+    plugin_format_manager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback);
 }
 
 void PluginProcessor::createSharedPluginInstance (const juce::PluginDescription& pd, [[maybe_unused]] EditorStyle where, const juce::MemoryBlock& mb)
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     const auto callback_for_shared_instance = [this, mb, pd] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         if (error.isNotEmpty())
@@ -380,7 +380,7 @@ void PluginProcessor::createSharedPluginInstance (const juce::PluginDescription&
             auto options = juce::MessageBoxOptions::makeOptionsOk (juce::MessageBoxIconType::WarningIcon,
                 "Plugin Load Failed",
                 error);
-            messageBox_ = juce::AlertWindow::showScopedAsync (options, nullptr);
+            message_box_ = juce::AlertWindow::showScopedAsync (options, nullptr);
             return;
         }
 
@@ -401,12 +401,12 @@ void PluginProcessor::createSharedPluginInstance (const juce::PluginDescription&
         shared_data_manager_.updateInner (std::move (instance), pd);
     };
 
-    pluginFormatManager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);
+    plugin_format_manager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);
 }
 
 void PluginProcessor::removeInner()
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
 
     if (inner_ == nullptr)
         return;
@@ -414,36 +414,36 @@ void PluginProcessor::removeInner()
     inner_ = nullptr; // editor will be deleted when pluginChanged_ is called
     inner_plugin_description_.reset();
     shared_data_manager_.removeInner();
-    juce::NullCheckedInvocation::invoke (pluginChanged_);
+    juce::NullCheckedInvocation::invoke (plugin_changed_);
 }
 
 bool PluginProcessor::isPluginLoaded() const
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
     return inner_ != nullptr;
 }
 
 std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor() const
 {
-    const juce::ScopedLock sl (innerMutex_);
+    const juce::ScopedLock sl (inner_mutex_);
     return rawToUniquePtr (inner_->hasEditor() ? inner_->createEditorIfNeeded() : nullptr);
 }
 
 EditorStyle PluginProcessor::getEditorStyle() const noexcept
 {
-    return editorStyle_;
+    return editor_style_;
 }
 
 void PluginProcessor::changeListenerCallback (juce::ChangeBroadcaster* source)
 {
-    if (source != &pluginList_)
+    if (source != &plugin_list_)
         return;
 
-    auto savedPluginList = pluginList_.createXml();
+    auto savedPluginList = plugin_list_.createXml();
     if (savedPluginList)
     {
-        appProperties_.getUserSettings()->setValue ("pluginList_", savedPluginList.get());
-        appProperties_.saveIfNeeded();
+        app_properties_.getUserSettings()->setValue ("pluginList_", savedPluginList.get());
+        app_properties_.saveIfNeeded();
     }
 }
 

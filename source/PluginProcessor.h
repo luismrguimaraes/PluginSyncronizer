@@ -68,10 +68,10 @@ public:
     void syncInners();
 
 public:
-    juce::ApplicationProperties appProperties_;
-    juce::AudioPluginFormatManager pluginFormatManager_;
-    juce::KnownPluginList pluginList_;
-    std::function<void()> pluginChanged_;
+    juce::ApplicationProperties app_properties_;
+    juce::AudioPluginFormatManager plugin_format_manager_;
+    juce::KnownPluginList plugin_list_;
+    std::function<void()> plugin_changed_;
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
@@ -79,12 +79,12 @@ private:
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 
-    juce::CriticalSection innerMutex_;
+    juce::CriticalSection inner_mutex_;
     std::unique_ptr<juce::AudioPluginInstance> inner_;
     std::optional<juce::PluginDescription> inner_plugin_description_;
-    EditorStyle editorStyle_ = EditorStyle {};
-    bool active_ = false;
-    juce::ScopedMessageBox messageBox_;
+    EditorStyle editor_style_ = EditorStyle {};
+    bool active_ { false };
+    juce::ScopedMessageBox message_box_;
 
     juce::AudioBuffer<float> float_process_buffer_;
     juce::AudioProcessorValueTreeState apvts_;
