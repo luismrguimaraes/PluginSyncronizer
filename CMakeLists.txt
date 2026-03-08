@@ -91,9 +91,7 @@ juce_add_plugin("${PROJECT_NAME}"
     # You might want to use v${MAJOR_VERSION} here once you go to v2...
     PRODUCT_NAME "${PRODUCT_NAME}"
 
-    PLUGINHOST_VST3 1
-    PLUGINHOST_VST 1
-    PLUGINHOST_AU 1)
+    VST3_AUTO_MANIFEST 1)
 
 # This lets us use our code in both the JUCE targets and our Test target
 # Without running into ODR violations
@@ -139,6 +137,10 @@ target_compile_definitions(SharedCode
 
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
     PRODUCT_NAME_WITHOUT_VERSION="PluginHost"
+
+    JUCE_PLUGINHOST_AU=1
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_LV2=1
 )
 
 # Link to any other modules you added (with juce_add_module) here!
