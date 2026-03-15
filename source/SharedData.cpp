@@ -1,16 +1,16 @@
 #include "SharedData.hpp"
 
-void SharedDataManager::addListener (SharedData::Listener* new_listener)
+void SharedDataManager::addListener (SharedData::Listener* newListener)
 {
-    if (std::ranges::find (shared_data_->listeners, new_listener) == shared_data_->listeners.end())
+    if (std::ranges::find (shared_data_->listeners, newListener) == shared_data_->listeners.end())
     {
-        shared_data_->listeners.push_back (new_listener);
+        shared_data_->listeners.push_back (newListener);
     }
 }
 
-void SharedDataManager::removeListener (SharedData::Listener* listener_to_remove)
+void SharedDataManager::removeListener (SharedData::Listener* listenerToRemove)
 {
-    auto it = std::ranges::find (shared_data_->listeners, listener_to_remove);
+    auto it = std::ranges::find (shared_data_->listeners, listenerToRemove);
     if (it != shared_data_->listeners.end())
     {
         shared_data_->listeners.erase (it);
@@ -39,12 +39,12 @@ void SharedDataManager::updateInner (std::unique_ptr<juce::AudioPluginInstance> 
     }
 }
 
-void SharedDataManager::updateInnerState (juce::MemoryBlock state_memory_block)
+void SharedDataManager::updateInnerState (juce::MemoryBlock stateMemoryBlock)
 {
     jassert (shared_data_->plugin_description.has_value());
     for (auto& listener : shared_data_->listeners)
     {
-        listener->loadInnerState (shared_data_->plugin_description.value(), state_memory_block);
+        listener->loadInnerState (shared_data_->plugin_description.value(), stateMemoryBlock);
     }
 }
 

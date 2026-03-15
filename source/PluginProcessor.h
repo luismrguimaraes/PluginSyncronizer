@@ -62,8 +62,8 @@ public:
         float newValue) override;
     void audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details) override;
 
-    void loadInner (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
-    void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
+    void loadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void loadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
 
     void syncInners();
 

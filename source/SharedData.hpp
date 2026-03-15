@@ -27,12 +27,12 @@ public:
         shared_data_->listeners.reserve (10);
     }
 
-    void addListener (SharedData::Listener* new_listener);
+    void addListener (SharedData::Listener* newListener);
 
-    void removeListener (SharedData::Listener* listener_to_remove);
+    void removeListener (SharedData::Listener* listenerToRemove);
 
     void updateInner (std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd);
-    void updateInnerState (juce::MemoryBlock memory_block);
+    void updateInnerState (juce::MemoryBlock memoryBlock);
 
     void removeInner();
 
