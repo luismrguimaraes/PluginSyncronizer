@@ -153,9 +153,9 @@ private:
 };
 
 PluginEditor::PluginEditor (PluginProcessor& p)
-    : AudioProcessorEditor (&p), processorRef_ (p), scopedCallback_ (p.pluginChanged_, [this] { pluginChanged(); })
+    : AudioProcessorEditor (&p), processorRef_ (p), scopedCallback_ (p.plugin_changed_, [this] { pluginChanged(); })
 {
-    loader_ = std::make_unique<PluginLoaderComponent> (p.pluginFormatManager_, p.pluginList_, [&p] (const juce::PluginDescription& pd, EditorStyle editorStyle) {
+    loader_ = std::make_unique<PluginLoaderComponent> (p.plugin_format_manager_, p.plugin_list_, [&p] (const juce::PluginDescription& pd, EditorStyle editorStyle) {
         p.createSharedPluginInstance (pd, editorStyle);
     });
 
@@ -166,7 +166,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     addAndMakeVisible (syncButton_);
     addAndMakeVisible (loader_.get());
 
-    p.pluginChanged_();
+    p.plugin_changed_();
 
     closeButton_.onClick = [this] { clearPlugin(); };
     showButton_.onClick = [this] { editor_->setVisible (true); };
