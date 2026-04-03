@@ -1,68 +1,68 @@
 #include "SharedData.hpp"
 
-void SharedDataManager::addListener (SharedData::Listener* newListener)
+void SharedDataManager::addListener(SharedData::Listener* newListener)
 {
-    if (std::ranges::find (shared_data_->listeners, newListener) == shared_data_->listeners.end())
+    if (std::ranges::find(shared_data_->listeners, newListener) == shared_data_->listeners.end())
     {
-        shared_data_->listeners.push_back (newListener);
+        shared_data_->listeners.push_back(newListener);
     }
 }
 
-void SharedDataManager::removeListener (SharedData::Listener* listenerToRemove)
+void SharedDataManager::removeListener(SharedData::Listener* listenerToRemove)
 {
-    auto it = std::ranges::find (shared_data_->listeners, listenerToRemove);
+    auto it = std::ranges::find(shared_data_->listeners, listenerToRemove);
     if (it != shared_data_->listeners.end())
     {
-        shared_data_->listeners.erase (it);
+        shared_data_->listeners.erase(it);
     }
 }
 
-void SharedDataManager::updateInner ([[maybe_unused]] const SharedData::Listener* sender, std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd)
+void SharedDataManager::updateInner([[maybe_unused]] const SharedData::Listener* sender, std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd)
 {
-    const juce::ScopedLock sl (inner_mutex_);
+    const juce::ScopedLock sl(inner_mutex_);
 
-    if (shared_data_->plugin_description.has_value() && pd.isDuplicateOf (shared_data_->plugin_description.value()))
+    if (shared_data_->plugin_description.has_value() && pd.isDuplicateOf(shared_data_->plugin_description.value()))
     {
-        jassert (shared_data_->inner != nullptr);
+        jassert(shared_data_->inner != nullptr);
         return;
     }
 
-    shared_data_->inner = std::move (inner);
+    shared_data_->inner = std::move(inner);
     shared_data_->plugin_description = pd;
 
     juce::MemoryBlock state_memory_block;
-    shared_data_->inner->getStateInformation (state_memory_block);
+    shared_data_->inner->getStateInformation(state_memory_block);
 
     for (auto& listener : shared_data_->listeners)
     {
-        listener->callbackLoadInner (shared_data_->plugin_description.value(), state_memory_block);
+        listener->callbackLoadInner(shared_data_->plugin_description.value(), state_memory_block);
     }
 }
 
-void SharedDataManager::updateInnerState (const SharedData::Listener* sender, juce::MemoryBlock stateMemoryBlock)
+void SharedDataManager::updateInnerState(const SharedData::Listener* sender, juce::MemoryBlock stateMemoryBlock)
 {
-    jassert (shared_data_->plugin_description.has_value());
+    jassert(shared_data_->plugin_description.has_value());
     for (auto& listener : shared_data_->listeners)
     {
         if (listener == sender)
             continue;
-        listener->callbackLoadInnerState (shared_data_->plugin_description.value(), stateMemoryBlock);
+        listener->callbackLoadInnerState(shared_data_->plugin_description.value(), stateMemoryBlock);
     }
 }
 
-void SharedDataManager::updateParameterValue (const SharedData::Listener* sender, int parameterIndex, float newValue)
+void SharedDataManager::updateParameterValue(const SharedData::Listener* sender, int parameterIndex, float newValue)
 {
     for (auto& listener : shared_data_->listeners)
     {
         if (listener == sender)
             continue;
-        listener->callbackUpdateParameterValue (parameterIndex, newValue);
+        listener->callbackUpdateParameterValue(parameterIndex, newValue);
     }
 }
 
 void SharedDataManager::removeInner()
 {
-    const juce::ScopedLock sl (inner_mutex_);
+    const juce::ScopedLock sl(inner_mutex_);
 
     if (shared_data_->inner == nullptr)
         return;
