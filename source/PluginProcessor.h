@@ -16,15 +16,15 @@ public:
     PluginProcessor();
     ~PluginProcessor() override;
 
-    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
 
     void reset() override;
 
-    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
 
-    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlock(juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
@@ -38,17 +38,17 @@ public:
 
     int getNumPrograms() override;
     int getCurrentProgram() override;
-    void setCurrentProgram (int index) override;
-    const juce::String getProgramName (int index) override;
-    void changeProgramName (int index, const juce::String& newName) override;
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String& newName) override;
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    void setStateInformation(const void* data, int sizeInBytes) override;
 
-    void setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
-    void createSharedPluginInstance (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
+    void setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
+    void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
-    void removeInner() override;
+    void callbackRemoveInner() override;
 
     bool isPluginLoaded() const;
 
@@ -57,15 +57,15 @@ public:
     EditorStyle getEditorStyle() const noexcept;
 
     // juce::AudioProcessorListener
-    void audioProcessorParameterChanged (AudioProcessor* processor,
+    void audioProcessorParameterChanged(AudioProcessor* processor,
         int parameterIndex,
         float newValue) override;
-    void audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details) override;
+    void audioProcessorChanged(AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details) override;
 
     // SharedData::Listener
-    void loadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
-    void loadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
-    void updateParameterValue (int parameterIndex, float newValue) override;
+    void callbackLoadInner(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void callbackUpdateParameterValue(int parameterIndex, float newValue) override;
 
     void syncInners();
 
@@ -76,10 +76,10 @@ public:
     std::function<void()> plugin_changed_;
 
 private:
-    void changeListenerCallback (juce::ChangeBroadcaster* source) override;
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override;
 
 private:
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)
 
     juce::CriticalSection inner_mutex_;
     std::unique_ptr<juce::AudioPluginInstance> inner_;

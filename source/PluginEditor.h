@@ -9,21 +9,21 @@ class PluginEditorComponent;
 class PluginEditor : public juce::AudioProcessorEditor
 {
 public:
-    explicit PluginEditor (PluginProcessor&);
+    explicit PluginEditor(PluginProcessor&);
     ~PluginEditor() override;
 
     //==============================================================================
-    void paint (juce::Graphics&) override;
+    void paint(juce::Graphics&) override;
     void resized() override;
-    void childBoundsChanged (Component* child) override;
-    void setScaleFactor (float scale) override;
+    void childBoundsChanged(Component* child) override;
+    void setScaleFactor(float scale) override;
 
 private: //NOLINT
     void pluginChanged();
     void clearPlugin();
 
 private:
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.

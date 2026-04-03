@@ -11,7 +11,7 @@ AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
-AllowShortIfStatementsOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: true
 AllowShortLambdasOnASingleLine: All
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakAfterDefinitionReturnType: None
@@ -59,7 +59,7 @@ SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: false
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeCpp11BracedList: true
-SpaceBeforeParens: NonEmptyParentheses
+SpaceBeforeParens: ControlStatements
 SpaceInEmptyParentheses: false
 SpaceBeforeInheritanceColon: true
 SpacesInAngles: false
