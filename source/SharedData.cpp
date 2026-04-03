@@ -35,7 +35,7 @@ void SharedDataManager::updateInner ([[maybe_unused]] const SharedData::Listener
 
     for (auto& listener : shared_data_->listeners)
     {
-        listener->loadInner (shared_data_->plugin_description.value(), state_memory_block);
+        listener->callbackLoadInner (shared_data_->plugin_description.value(), state_memory_block);
     }
 }
 
@@ -46,7 +46,7 @@ void SharedDataManager::updateInnerState (const SharedData::Listener* sender, ju
     {
         if (listener == sender)
             continue;
-        listener->loadInnerState (shared_data_->plugin_description.value(), stateMemoryBlock);
+        listener->callbackLoadInnerState (shared_data_->plugin_description.value(), stateMemoryBlock);
     }
 }
 
@@ -56,7 +56,7 @@ void SharedDataManager::updateParameterValue (const SharedData::Listener* sender
     {
         if (listener == sender)
             continue;
-        listener->updateParameterValue (parameterIndex, newValue);
+        listener->callbackUpdateParameterValue (parameterIndex, newValue);
     }
 }
 
@@ -72,6 +72,6 @@ void SharedDataManager::removeInner()
 
     for (auto& listener : shared_data_->listeners)
     {
-        listener->removeInner();
+        listener->callbackRemoveInner();
     }
 }

@@ -48,7 +48,7 @@ public:
     void setNewPlugin (const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
     void createSharedPluginInstance (const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
-    void removeInner() override;
+    void callbackRemoveInner() override;
 
     bool isPluginLoaded() const;
 
@@ -63,9 +63,9 @@ public:
     void audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details) override;
 
     // SharedData::Listener
-    void loadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
-    void loadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
-    void updateParameterValue (int parameterIndex, float newValue) override;
+    void callbackLoadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void callbackLoadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void callbackUpdateParameterValue (int parameterIndex, float newValue) override;
 
     void syncInners();
 

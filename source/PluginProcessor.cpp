@@ -293,7 +293,7 @@ void PluginProcessor::syncInners()
     shared_data_manager_.updateInnerState (this, mb);
 }
 
-void PluginProcessor::loadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
+void PluginProcessor::callbackLoadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
     if (inner_plugin_description_.has_value() && pluginDescription.isDuplicateOf (inner_plugin_description_.value()))
     {
@@ -304,7 +304,7 @@ void PluginProcessor::loadInner (const juce::PluginDescription& pluginDescriptio
     setNewPlugin (pluginDescription, stateMemoryBlock);
 }
 
-void PluginProcessor::loadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
+void PluginProcessor::callbackLoadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
     if (!stateMemoryBlock.isEmpty())
     {
@@ -321,7 +321,7 @@ void PluginProcessor::loadInnerState (const juce::PluginDescription& pluginDescr
     }
 }
 
-void PluginProcessor::updateParameterValue (int parameterIndex, float newValue)
+void PluginProcessor::callbackUpdateParameterValue (int parameterIndex, float newValue)
 {
     if (syncing_params_ && inner_ != nullptr)
     {
@@ -415,7 +415,7 @@ void PluginProcessor::createSharedPluginInstance (const juce::PluginDescription&
     plugin_format_manager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);
 }
 
-void PluginProcessor::removeInner()
+void PluginProcessor::callbackRemoveInner()
 {
     const juce::ScopedLock sl (inner_mutex_);
 

@@ -289,5 +289,5 @@ void PluginEditor::clearPlugin()
 {
     innerEditorComponent_ = nullptr;
     editor_ = nullptr;
-    processorRef_.removeInner();
+    processorRef_.callbackRemoveInner();
 }
