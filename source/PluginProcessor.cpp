@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SharedData.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
 #include <algorithm>
 #include <cstddef>
@@ -9,9 +10,9 @@
 
 namespace
 {
-    static constexpr const char* innerStateTag = "inner_state";
-    static constexpr const char* groupTag = "group";
-    static constexpr const char* editorStyleTag = "editor_style";
+    static constexpr const char* kInnerStateTag = "inner_state";
+    static constexpr const char* kGroupTag = "group";
+    static constexpr const char* kEditorStyleTag = "editor_style";
 }
 //==============================================================================
 PluginProcessor::PluginProcessor()
@@ -215,19 +216,19 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 
     juce::XmlElement xml ("state");
 
-    auto groupNode = std::make_unique<juce::XmlElement> (groupTag);
+    auto groupNode = std::make_unique<juce::XmlElement> (kGroupTag);
     groupNode->addTextElement (juce::String { group_ });
     xml.addChildElement (groupNode.release());
 
     if (inner_ != nullptr)
     {
-        xml.setAttribute (editorStyleTag, (int) editor_style_);
+        xml.setAttribute (kEditorStyleTag, (int) editor_style_);
         xml.addChildElement (inner_->getPluginDescription().createXml().release());
         xml.addChildElement ([this] {
             juce::MemoryBlock innerState;
             inner_->getStateInformation (innerState);
 
-            auto stateNode = std::make_unique<juce::XmlElement> (innerStateTag);
+            auto stateNode = std::make_unique<juce::XmlElement> (kInnerStateTag);
             stateNode->addTextElement (innerState.toBase64Encoding());
             return stateNode.release();
         }());
@@ -255,13 +256,13 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
         pd.loadFromXml (*pluginNode);
 
         juce::MemoryBlock innerState;
-        innerState.fromBase64Encoding (xml->getChildElementAllSubText (innerStateTag, {}));
+        innerState.fromBase64Encoding (xml->getChildElementAllSubText (kInnerStateTag, {}));
 
         createSharedPluginInstance (pd,
-            (EditorStyle) xml->getIntAttribute (editorStyleTag, 0),
+            (EditorStyle) xml->getIntAttribute (kEditorStyleTag, 0),
             innerState);
 
-        group_ = xml->getIntAttribute (groupTag, 0);
+        group_ = xml->getIntAttribute (kGroupTag, 0);
     }
 
     // You should use this method to restore your parameters from this memory block,
@@ -275,51 +276,61 @@ void PluginProcessor::audioProcessorParameterChanged (AudioProcessor* processor,
     if (processor != inner_.get())
         return;
 
-    // auto& tree = inner_->getParameterTree();
-    // for (auto param : tree.getParameters (false))
-    // {
-    //     std::cout << param->getLabel() << " " << param->getName (40) << "\n";
-    // }
-    //
+    if (syncing_params_)
+    {
+        shared_data_manager_.updateParameterValue (this, parameterIndex, newValue);
+    }
 }
 
-void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details)
+void PluginProcessor::audioProcessorChanged ([[maybe_unused]] AudioProcessor* processor, [[maybe_unused]] const juce::AudioProcessorListener::ChangeDetails& details)
 {
-    return;
 }
 
 void PluginProcessor::syncInners()
 {
     juce::MemoryBlock mb;
     inner_->getStateInformation (mb);
-    shared_data_manager_.updateInnerState (mb);
+    shared_data_manager_.updateInnerState (this, mb);
 }
 
-void PluginProcessor::loadInner (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block)
+void PluginProcessor::loadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
-    if (inner_plugin_description_.has_value() && plugin_description.isDuplicateOf (inner_plugin_description_.value()))
+    if (inner_plugin_description_.has_value() && pluginDescription.isDuplicateOf (inner_plugin_description_.value()))
     {
         jassert (inner_ != nullptr);
         return;
     }
 
-    setNewPlugin (plugin_description, state_memory_block);
+    setNewPlugin (pluginDescription, stateMemoryBlock);
 }
 
-void PluginProcessor::loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block)
+void PluginProcessor::loadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
-    if (!state_memory_block.isEmpty())
+    if (!stateMemoryBlock.isEmpty())
     {
         if (!inner_plugin_description_.has_value())
         {
-            setNewPlugin (plugin_description, state_memory_block);
+            setNewPlugin (pluginDescription, stateMemoryBlock);
         }
         else
         {
-            jassert (plugin_description.isDuplicateOf (inner_plugin_description_.value()));
+            jassert (pluginDescription.isDuplicateOf (inner_plugin_description_.value()));
             jassert (inner_ != nullptr);
-            inner_->setStateInformation (state_memory_block.getData(), (int) state_memory_block.getSize());
+            inner_->setStateInformation (stateMemoryBlock.getData(), (int) stateMemoryBlock.getSize());
         }
+    }
+}
+
+void PluginProcessor::updateParameterValue (int parameterIndex, float newValue)
+{
+    if (syncing_params_ && inner_ != nullptr)
+    {
+        jassert (parameterIndex < inner_->getParameters().size());
+        auto param = inner_->getHostedParameter (parameterIndex);
+        param->setValue (newValue);
+
+        auto change_details = AudioProcessorListener::ChangeDetails {};
+        updateHostDisplay (change_details.withNonParameterStateChanged (true));
     }
 }
 
@@ -398,7 +409,7 @@ void PluginProcessor::createSharedPluginInstance (const juce::PluginDescription&
         }
 
         instance->addListener (this);
-        shared_data_manager_.updateInner (std::move (instance), pd);
+        shared_data_manager_.updateInner (this, std::move (instance), pd);
     };
 
     plugin_format_manager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);

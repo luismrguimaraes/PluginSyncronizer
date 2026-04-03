@@ -62,8 +62,10 @@ public:
         float newValue) override;
     void audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details) override;
 
-    void loadInner (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
-    void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) override;
+    // SharedData::Listener
+    void loadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void loadInnerState (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void updateParameterValue (int parameterIndex, float newValue) override;
 
     void syncInners();
 
@@ -92,4 +94,5 @@ private:
     int group_ { 0 };
 
     SharedDataManager shared_data_manager_;
+    bool syncing_params_ { true };
 };
