@@ -10,6 +10,8 @@ struct SharedData
     {
         virtual void loadInner (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& memory_block) = 0;
         virtual void loadInnerState (const juce::PluginDescription& plugin_description, const juce::MemoryBlock& state_memory_block) = 0;
+        // ToDo: also add parameterBegin and end touch
+        virtual void updateParameterValue (int parameterIndex, float newValue) = 0;
         virtual void removeInner() = 0;
     };
 
@@ -31,8 +33,9 @@ public:
 
     void removeListener (SharedData::Listener* listenerToRemove);
 
-    void updateInner (std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd);
-    void updateInnerState (juce::MemoryBlock memoryBlock);
+    void updateInner (const SharedData::Listener* sender, std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd);
+    void updateInnerState (const SharedData::Listener* sender, juce::MemoryBlock memoryBlock);
+    void updateParameterValue (const SharedData::Listener* sender, int parameterIndex, float newValue);
 
     void removeInner();
 

@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SharedData.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
 #include <algorithm>
 #include <cstddef>
@@ -275,24 +276,21 @@ void PluginProcessor::audioProcessorParameterChanged (AudioProcessor* processor,
     if (processor != inner_.get())
         return;
 
-    // auto& tree = inner_->getParameterTree();
-    // for (auto param : tree.getParameters (false))
-    // {
-    //     std::cout << param->getLabel() << " " << param->getName (40) << "\n";
-    // }
-    //
+    if (syncing_params_)
+    {
+        shared_data_manager_.updateParameterValue (this, parameterIndex, newValue);
+    }
 }
 
-void PluginProcessor::audioProcessorChanged (AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details)
+void PluginProcessor::audioProcessorChanged ([[maybe_unused]] AudioProcessor* processor, [[maybe_unused]] const juce::AudioProcessorListener::ChangeDetails& details)
 {
-    return;
 }
 
 void PluginProcessor::syncInners()
 {
     juce::MemoryBlock mb;
     inner_->getStateInformation (mb);
-    shared_data_manager_.updateInnerState (mb);
+    shared_data_manager_.updateInnerState (this, mb);
 }
 
 void PluginProcessor::loadInner (const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
@@ -320,6 +318,19 @@ void PluginProcessor::loadInnerState (const juce::PluginDescription& pluginDescr
             jassert (inner_ != nullptr);
             inner_->setStateInformation (stateMemoryBlock.getData(), (int) stateMemoryBlock.getSize());
         }
+    }
+}
+
+void PluginProcessor::updateParameterValue (int parameterIndex, float newValue)
+{
+    if (syncing_params_ && inner_ != nullptr)
+    {
+        jassert (parameterIndex < inner_->getParameters().size());
+        auto param = inner_->getHostedParameter (parameterIndex);
+        param->setValue (newValue);
+
+        auto change_details = AudioProcessorListener::ChangeDetails {};
+        updateHostDisplay (change_details.withNonParameterStateChanged (true));
     }
 }
 
@@ -398,7 +409,7 @@ void PluginProcessor::createSharedPluginInstance (const juce::PluginDescription&
         }
 
         instance->addListener (this);
-        shared_data_manager_.updateInner (std::move (instance), pd);
+        shared_data_manager_.updateInner (this, std::move (instance), pd);
     };
 
     plugin_format_manager_.createPluginInstanceAsync (pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);

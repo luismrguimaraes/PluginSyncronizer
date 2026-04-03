@@ -17,7 +17,7 @@ void SharedDataManager::removeListener (SharedData::Listener* listenerToRemove)
     }
 }
 
-void SharedDataManager::updateInner (std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd)
+void SharedDataManager::updateInner ([[maybe_unused]] const SharedData::Listener* sender, std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd)
 {
     const juce::ScopedLock sl (inner_mutex_);
 
@@ -39,12 +39,24 @@ void SharedDataManager::updateInner (std::unique_ptr<juce::AudioPluginInstance> 
     }
 }
 
-void SharedDataManager::updateInnerState (juce::MemoryBlock stateMemoryBlock)
+void SharedDataManager::updateInnerState (const SharedData::Listener* sender, juce::MemoryBlock stateMemoryBlock)
 {
     jassert (shared_data_->plugin_description.has_value());
     for (auto& listener : shared_data_->listeners)
     {
+        if (listener == sender)
+            continue;
         listener->loadInnerState (shared_data_->plugin_description.value(), stateMemoryBlock);
+    }
+}
+
+void SharedDataManager::updateParameterValue (const SharedData::Listener* sender, int parameterIndex, float newValue)
+{
+    for (auto& listener : shared_data_->listeners)
+    {
+        if (listener == sender)
+            continue;
+        listener->updateParameterValue (parameterIndex, newValue);
     }
 }
 
