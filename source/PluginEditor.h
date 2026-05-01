@@ -22,19 +22,21 @@ private: //NOLINT
     void pluginChanged();
     void clearPlugin();
 
+    void updateUI();
+
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 
     // ToDo: fix formatting according to README.md
 
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
     PluginProcessor& processorRef_;
 
     std::unique_ptr<PluginLoaderComponent> loader_;
     std::unique_ptr<melatonin::Inspector> inspector_;
     juce::ScopedValueSetter<std::function<void()>> scopedCallback_;
     std::unique_ptr<Component> editor_;
+
+    juce::TimedCallback ui_update_timer_;
 
     float currentScaleFactor_ { 1.0f };
 

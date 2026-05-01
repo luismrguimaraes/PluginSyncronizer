@@ -13,14 +13,13 @@ namespace
     static constexpr const char* kInnerStateTag = "inner_state";
     static constexpr const char* kGroupTag = "group";
     static constexpr const char* kEditorStyleTag = "editor_style";
+
 }
 //==============================================================================
 PluginProcessor::PluginProcessor()
     : AudioProcessor(BusesProperties()
 #if !JucePlugin_IsMidiEffect
-    #if !JucePlugin_IsSynth
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
-    #endif
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)
 #endif
             ),
@@ -175,6 +174,8 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 {
     jassert(!isUsingDoublePrecision());
 
+    const juce::ScopedLock sl(inner_mutex_);
+
     if (inner_ != nullptr)
     {
         inner_->processBlock(buffer, midiMessages);
@@ -234,6 +235,9 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
         }());
     }
 
+    xml.setAttribute("accept_changes", accept_changes_);
+    xml.setAttribute("propagate_changes", propagate_changes_);
+
     xml.writeTo(juce::File { "~/Desktop/test.xml" });
 
     const auto text = xml.toString();
@@ -263,6 +267,9 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
             innerState);
 
         group_ = xml->getIntAttribute(kGroupTag, 0);
+
+        accept_changes_ = xml->getBoolAttribute("accept_changes");
+        propagate_changes_ = xml->getBoolAttribute("propagate_changes");
     }
 
     // You should use this method to restore your parameters from this memory block,
@@ -273,8 +280,11 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
     int parameterIndex,
     float newValue)
 {
+    const juce::ScopedLock sl(inner_mutex_);
+
     jassert(processor == inner_.get());
 
+    notifyHost();
     if (propagate_changes_)
     {
         shared_data_manager_.updateParameterValue(this, parameterIndex, newValue);
@@ -287,6 +297,8 @@ void PluginProcessor::audioProcessorChanged([[maybe_unused]] AudioProcessor* pro
 
 void PluginProcessor::propagateState()
 {
+    const juce::ScopedLock sl(inner_mutex_);
+
     juce::MemoryBlock mb;
     inner_->getStateInformation(mb);
     shared_data_manager_.updateInnerState(this, mb);
@@ -299,7 +311,10 @@ bool PluginProcessor::getAcceptChanges()
 
 void PluginProcessor::setAcceptChanges(bool accept)
 {
+    if (accept_changes_ == accept) return;
+
     accept_changes_ = accept;
+    notifyHost();
 }
 
 bool PluginProcessor::getPropagateChanges()
@@ -309,13 +324,18 @@ bool PluginProcessor::getPropagateChanges()
 
 void PluginProcessor::setPropagateChanges(bool propagate)
 {
+    if (propagate_changes_ == propagate) return;
+
     propagate_changes_ = propagate;
+    notifyHost();
 }
 
 void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
     if (inner_plugin_description_.has_value() && pluginDescription.isDuplicateOf(inner_plugin_description_.value()))
     {
+        const juce::ScopedLock sl(inner_mutex_);
+
         jassert(inner_ != nullptr);
         return;
     }
@@ -336,6 +356,8 @@ void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& plug
         else
         {
             jassert(pluginDescription.isDuplicateOf(inner_plugin_description_.value()));
+
+            const juce::ScopedLock sl(inner_mutex_);
             jassert(inner_ != nullptr);
             inner_->setStateInformation(stateMemoryBlock.getData(), (int) stateMemoryBlock.getSize());
         }
@@ -344,6 +366,8 @@ void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& plug
 
 void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float newValue)
 {
+    const juce::ScopedLock sl(inner_mutex_);
+
     jassert(inner_ != nullptr);
 
     if (!accept_changes_) return;
@@ -352,8 +376,7 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     auto param = inner_->getHostedParameter(parameterIndex);
     param->setValue(newValue); // Don't notify to avoid infinite loop (listener -> shared -> here -> listener -> ...)
 
-    auto change_details = AudioProcessorListener::ChangeDetails {};
-    updateHostDisplay(change_details.withNonParameterStateChanged(true));
+    notifyHost();
 }
 
 void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
@@ -407,12 +430,12 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
     };
 
     plugin_format_manager_.createPluginInstanceAsync(pd, getSampleRate(), getBlockSize(), callback);
+
+    notifyHost();
 }
 
 void PluginProcessor::createSharedPluginInstance(const juce::PluginDescription& pd, [[maybe_unused]] EditorStyle where, const juce::MemoryBlock& mb)
 {
-    const juce::ScopedLock sl(inner_mutex_);
-
     const auto callback_for_shared_instance = [this, mb, pd](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         if (error.isNotEmpty())
         {
@@ -449,10 +472,30 @@ void PluginProcessor::callbackRemoveInner()
     if (inner_ == nullptr)
         return;
 
-    inner_ = nullptr; // editor will be deleted when pluginChanged_ is called
+    editor_needs_deletion_.store(true);
+    juce::NullCheckedInvocation::invoke(plugin_changed_);
+    inner_ = nullptr; // editor will be deleted when plugin_changed_ is called
     inner_plugin_description_.reset();
     shared_data_manager_.removeInner();
-    juce::NullCheckedInvocation::invoke(plugin_changed_);
+    editor_needs_deletion_.store(false);
+
+    notifyHost();
+}
+
+void PluginProcessor::notifyHost()
+{
+    auto change_details = AudioProcessorListener::ChangeDetails {};
+    updateHostDisplay(change_details.withParameterInfoChanged(true).withNonParameterStateChanged(true));
+}
+
+void PluginProcessor::removeInner()
+{
+    shared_data_manager_.removeInner();
+}
+
+bool PluginProcessor::editorNeedsDeletion()
+{
+    return editor_needs_deletion_.load();
 }
 
 bool PluginProcessor::isPluginLoaded() const
