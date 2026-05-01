@@ -99,7 +99,7 @@ add_library(SharedCode INTERFACE)
 
 clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
     CLAP_ID "${BUNDLE_ID}"
-    CLAP_FEATURES audio-effect)
+    CLAP_FEATURES instrument)
 
 # Enable fast math, C++20 and a few other target defaults
 include(SharedCodeDefaults)
@@ -141,6 +141,10 @@ target_compile_definitions(SharedCode
     JUCE_PLUGINHOST_AU=1
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_LV2=1
+
+    JUCE_NEEDS_MIDI_INPUT=1
+    ISSYNTH=1
+    JUCE_NEEDS_MIDI_OUTPUT=0
 )
 
 # Link to any other modules you added (with juce_add_module) here!

@@ -7,6 +7,8 @@ namespace
 
     constexpr auto kEditorHeight { 500 };
     constexpr auto kEditorWidth { 750 };
+
+    constexpr int kUIUpdateIntervalMs { 22 };
 }
 
 static void doLayout(juce::Component* main, juce::Component& bottom, int bottomHeight, juce::Rectangle<int> bounds)
@@ -153,7 +155,7 @@ private:
 };
 
 PluginEditor::PluginEditor(PluginProcessor& p)
-    : AudioProcessorEditor(&p), processorRef_(p), scopedCallback_(p.plugin_changed_, [this] { pluginChanged(); })
+    : AudioProcessorEditor(&p), processorRef_(p), scopedCallback_(p.plugin_changed_, [this] { pluginChanged(); }), ui_update_timer_ { [this]() { updateUI(); } }
 {
     loader_ = std::make_unique<PluginLoaderComponent>(p.plugin_format_manager_, p.plugin_list_, [&p](const juce::PluginDescription& pd, EditorStyle editorStyle) {
         p.createSharedPluginInstance(pd, editorStyle);
@@ -171,7 +173,10 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     p.plugin_changed_();
 
     closeButton_.onClick = [this] { clearPlugin(); };
-    showButton_.onClick = [this] { editor_->setVisible(true); };
+    showButton_.onClick = [this] {
+        jassert(editor_ != nullptr);
+        editor_->setVisible(true);
+    };
     propagateStateButton_.onClick = [this] { processorRef_.propagateState(); };
 
     accept_changes_toggle_.setToggleState(processorRef_.getAcceptChanges(), juce::NotificationType::dontSendNotification);
@@ -199,6 +204,8 @@ PluginEditor::PluginEditor(PluginProcessor& p)
 
         inspector_->setVisible(true);
     };
+
+    ui_update_timer_.startTimer(kUIUpdateIntervalMs);
 }
 
 PluginEditor::~PluginEditor()
@@ -259,54 +266,56 @@ void PluginEditor::setScaleFactor(float scale)
 
 void PluginEditor::pluginChanged()
 {
-    loader_->setVisible(!processorRef_.isPluginLoaded());
     closeButton_.setVisible(processorRef_.isPluginLoaded());
     showButton_.setVisible(processorRef_.isPluginLoaded());
     propagateStateButton_.setVisible(processorRef_.isPluginLoaded());
 
-    if (processorRef_.isPluginLoaded())
+    if (processorRef_.editorNeedsDeletion() || !processorRef_.isPluginLoaded())
     {
-        auto editorComponent = std::make_unique<PluginEditorComponent>(processorRef_.createInnerEditor(), [this] {
-            [[maybe_unused]] const auto posted = juce::MessageManager::callAsync([this] { clearPlugin(); });
-            jassert(posted);
-        });
-
-        editorComponent->setScaleFactor(currentScaleFactor_);
-        innerEditorComponent_ = editorComponent.get();
-
-        editor_ = [&]() -> std::unique_ptr<Component> {
-            switch (processorRef_.getEditorStyle())
-            {
-                case EditorStyle::thisWindow:
-                    addAndMakeVisible(editorComponent.get());
-                    setSize(editorComponent->getWidth(), editorComponent->getHeight());
-                    return std::move(editorComponent);
-
-                case EditorStyle::newWindow:
-                    const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
-                    auto window = std::make_unique<ScaledDocumentWindow>(bg, currentScaleFactor_);
-                    window->setAlwaysOnTop(true);
-                    window->setContentOwned(editorComponent.release(), true);
-                    window->centreAroundComponent(this, window->getWidth(), window->getHeight());
-                    window->setVisible(true);
-                    window->setUsingNativeTitleBar(true);
-                    return window;
-            }
-
-            jassertfalse;
-            return nullptr;
-        }();
-    }
-    else
-    {
+        innerEditorComponent_ = nullptr;
         editor_ = nullptr;
         setSize(kEditorWidth, kEditorHeight);
+        return;
     }
+
+    auto editorComponent = std::make_unique<PluginEditorComponent>(processorRef_.createInnerEditor(), [this] {
+        [[maybe_unused]] const auto posted = juce::MessageManager::callAsync([this] { clearPlugin(); });
+        jassert(posted);
+    });
+
+    editorComponent->setScaleFactor(currentScaleFactor_);
+    innerEditorComponent_ = editorComponent.get();
+
+    editor_ = [&]() -> std::unique_ptr<Component> {
+        switch (processorRef_.getEditorStyle())
+        {
+            case EditorStyle::thisWindow:
+                addAndMakeVisible(editorComponent.get());
+                setSize(editorComponent->getWidth(), editorComponent->getHeight());
+                return std::move(editorComponent);
+
+            case EditorStyle::newWindow:
+                const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
+                auto window = std::make_unique<ScaledDocumentWindow>(bg, currentScaleFactor_);
+                window->setAlwaysOnTop(true);
+                window->setContentOwned(editorComponent.release(), true);
+                window->centreAroundComponent(this, window->getWidth(), window->getHeight());
+                window->setVisible(true);
+                window->setUsingNativeTitleBar(true);
+                return window;
+        }
+
+        jassertfalse;
+        return nullptr;
+    }();
 }
 
 void PluginEditor::clearPlugin()
 {
-    innerEditorComponent_ = nullptr;
-    editor_ = nullptr;
-    processorRef_.callbackRemoveInner();
+    processorRef_.removeInner();
+}
+
+void PluginEditor::updateUI()
+{
+    loader_->setVisible(!processorRef_.isPluginLoaded());
 }

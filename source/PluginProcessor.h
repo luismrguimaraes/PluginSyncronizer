@@ -49,6 +49,14 @@ public:
     void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
     bool isPluginLoaded() const;
+    void removeInner();
+    bool editorNeedsDeletion();
+    void propagateState();
+
+    bool getAcceptChanges();
+    void setAcceptChanges(bool accept);
+    bool getPropagateChanges();
+    void setPropagateChanges(bool propagate);
 
     std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const;
 
@@ -66,12 +74,7 @@ public:
     void callbackUpdateParameterValue(int parameterIndex, float newValue) override;
     void callbackRemoveInner() override;
 
-    void propagateState();
-
-    bool getAcceptChanges();
-    void setAcceptChanges(bool accept);
-    bool getPropagateChanges();
-    void setPropagateChanges(bool propagate);
+    void notifyHost();
 
 public:
     juce::ApplicationProperties app_properties_;
@@ -91,6 +94,8 @@ private:
     EditorStyle editor_style_ = EditorStyle {};
     bool active_ { false };
     juce::ScopedMessageBox message_box_;
+
+    std::atomic<bool> editor_needs_deletion_ { false };
 
     juce::AudioBuffer<float> float_process_buffer_;
     juce::AudioProcessorValueTreeState apvts_;
