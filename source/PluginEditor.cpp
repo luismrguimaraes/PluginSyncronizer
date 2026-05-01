@@ -163,14 +163,29 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     setResizable(false, false);
     addAndMakeVisible(closeButton_);
     addAndMakeVisible(showButton_);
-    addAndMakeVisible(syncButton_);
+    addAndMakeVisible(propagateStateButton_);
+    addAndMakeVisible(accept_changes_toggle_);
+    addAndMakeVisible(propagate_changes_toggle_);
     addAndMakeVisible(loader_.get());
 
     p.plugin_changed_();
 
     closeButton_.onClick = [this] { clearPlugin(); };
     showButton_.onClick = [this] { editor_->setVisible(true); };
-    syncButton_.onClick = [this] { processorRef_.syncInners(); };
+    propagateStateButton_.onClick = [this] { processorRef_.propagateState(); };
+
+    accept_changes_toggle_.setToggleState(processorRef_.getAcceptChanges(), juce::NotificationType::dontSendNotification);
+    accept_changes_toggle_.onClick = [this] {
+        auto old_value = processorRef_.getAcceptChanges();
+        processorRef_.setAcceptChanges(!old_value);
+        accept_changes_toggle_.setToggleState(!old_value, juce::NotificationType::sendNotification);
+    };
+    propagate_changes_toggle_.setToggleState(processorRef_.getPropagateChanges(), juce::NotificationType::dontSendNotification);
+    propagate_changes_toggle_.onClick = [this] {
+        auto old_value = processorRef_.getPropagateChanges();
+        processorRef_.setPropagateChanges(!old_value);
+        propagate_changes_toggle_.setToggleState(!old_value, juce::NotificationType::sendNotification);
+    };
 
     addAndMakeVisible(inspectButton_);
 
@@ -212,7 +227,11 @@ void PluginEditor::resized()
     auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
     closeButton_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
     showButton_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
-    syncButton_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
+    propagateStateButton_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
+
+    accept_changes_toggle_.setBounds(closeButton_.getBounds().withX(0));
+    propagate_changes_toggle_.setBounds(showButton_.getBounds().withX(0));
+
     loader_->setBounds(getLocalBounds());
 }
 
@@ -243,7 +262,7 @@ void PluginEditor::pluginChanged()
     loader_->setVisible(!processorRef_.isPluginLoaded());
     closeButton_.setVisible(processorRef_.isPluginLoaded());
     showButton_.setVisible(processorRef_.isPluginLoaded());
-    syncButton_.setVisible(processorRef_.isPluginLoaded());
+    propagateStateButton_.setVisible(processorRef_.isPluginLoaded());
 
     if (processorRef_.isPluginLoaded())
     {

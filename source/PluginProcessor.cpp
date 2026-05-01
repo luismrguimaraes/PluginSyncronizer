@@ -273,10 +273,9 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
     int parameterIndex,
     float newValue)
 {
-    if (processor != inner_.get())
-        return;
+    jassert(processor == inner_.get());
 
-    if (syncing_params_)
+    if (propagate_changes_)
     {
         shared_data_manager_.updateParameterValue(this, parameterIndex, newValue);
     }
@@ -286,11 +285,31 @@ void PluginProcessor::audioProcessorChanged([[maybe_unused]] AudioProcessor* pro
 {
 }
 
-void PluginProcessor::syncInners()
+void PluginProcessor::propagateState()
 {
     juce::MemoryBlock mb;
     inner_->getStateInformation(mb);
     shared_data_manager_.updateInnerState(this, mb);
+}
+
+bool PluginProcessor::getAcceptChanges()
+{
+    return accept_changes_;
+}
+
+void PluginProcessor::setAcceptChanges(bool accept)
+{
+    accept_changes_ = accept;
+}
+
+bool PluginProcessor::getPropagateChanges()
+{
+    return propagate_changes_;
+}
+
+void PluginProcessor::setPropagateChanges(bool propagate)
+{
+    propagate_changes_ = propagate;
 }
 
 void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
@@ -306,6 +325,8 @@ void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDes
 
 void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
+    if (!accept_changes_) return;
+
     if (!stateMemoryBlock.isEmpty())
     {
         if (!inner_plugin_description_.has_value())
@@ -323,15 +344,16 @@ void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& plug
 
 void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float newValue)
 {
-    if (syncing_params_ && inner_ != nullptr)
-    {
-        jassert(parameterIndex < inner_->getParameters().size());
-        auto param = inner_->getHostedParameter(parameterIndex);
-        param->setValue(newValue);
+    jassert(inner_ != nullptr);
 
-        auto change_details = AudioProcessorListener::ChangeDetails {};
-        updateHostDisplay(change_details.withNonParameterStateChanged(true));
-    }
+    if (!accept_changes_) return;
+
+    jassert(parameterIndex < inner_->getParameters().size());
+    auto param = inner_->getHostedParameter(parameterIndex);
+    param->setValue(newValue); // Don't notify to avoid infinite loop (listener -> shared -> here -> listener -> ...)
+
+    auto change_details = AudioProcessorListener::ChangeDetails {};
+    updateHostDisplay(change_details.withNonParameterStateChanged(true));
 }
 
 void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
@@ -341,6 +363,10 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
     const auto callback = [this, mb, pd](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         if (error.isNotEmpty())
         {
+            auto options = juce::MessageBoxOptions::makeOptionsOk(juce::MessageBoxIconType::WarningIcon,
+                "Plugin Instantiation Failed",
+                error);
+            message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
             return;
         }
 
@@ -360,6 +386,8 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         // In any case, it is essential that the instance plugin is told about the bus
         // configuration that will be used. The AudioBuffer passed to the instance plugin must also
         // exactly match this layout.
+        //
+        // ToDo: this ^
 
         if (active_)
         {
@@ -408,7 +436,6 @@ void PluginProcessor::createSharedPluginInstance(const juce::PluginDescription& 
             instance->prepareToPlay(getSampleRate(), getBlockSize());
         }
 
-        instance->addListener(this);
         shared_data_manager_.updateInner(this, std::move(instance), pd);
     };
 
