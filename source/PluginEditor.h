@@ -25,6 +25,8 @@ private: //NOLINT
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 
+    // ToDo: fix formatting according to README.md
+
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
     PluginProcessor& processorRef_;
@@ -37,9 +39,12 @@ private:
     float currentScaleFactor_ { 1.0f };
 
     juce::TextButton closeButton_ { "Close Plugin" };
-    juce::TextButton showButton_ { "Show Plugin" };
-    juce::TextButton syncButton_ { "Sync" };
+    juce::TextButton showButton_ { "Show Plugin UI" };
+    juce::TextButton propagateStateButton_ { "Propagate State" };
     juce::TextButton inspectButton_ { "Inspect the UI" };
+
+    juce::ToggleButton accept_changes_toggle_ { "Accept Changes" };
+    juce::ToggleButton propagate_changes_toggle_ { "Propagate Changes" };
 
     PluginEditorComponent* innerEditorComponent_ = nullptr;
 };

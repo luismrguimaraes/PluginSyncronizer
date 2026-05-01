@@ -48,8 +48,6 @@ public:
     void setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
     void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
-    void callbackRemoveInner() override;
-
     bool isPluginLoaded() const;
 
     std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const;
@@ -66,8 +64,14 @@ public:
     void callbackLoadInner(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
     void callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
     void callbackUpdateParameterValue(int parameterIndex, float newValue) override;
+    void callbackRemoveInner() override;
 
-    void syncInners();
+    void propagateState();
+
+    bool getAcceptChanges();
+    void setAcceptChanges(bool accept);
+    bool getPropagateChanges();
+    void setPropagateChanges(bool propagate);
 
 public:
     juce::ApplicationProperties app_properties_;
@@ -94,5 +98,6 @@ private:
     int group_ { 0 };
 
     SharedDataManager shared_data_manager_;
-    bool syncing_params_ { true };
+    bool accept_changes_ { true };
+    bool propagate_changes_ { true };
 };
