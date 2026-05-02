@@ -42,6 +42,6 @@ public:
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SharedDataManager)
 
-    juce::CriticalSection inner_mutex_;
+    juce::CriticalSection shared_data_mutex_;
     juce::SharedResourcePointer<SharedData> shared_data_ {};
 };

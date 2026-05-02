@@ -23,7 +23,7 @@ PluginProcessor::PluginProcessor()
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)
 #endif
             ),
-      apvts_(*this, nullptr)
+      apvts_ { *this, nullptr, "Params", { std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "test_id", 1 }, "Test Param", juce::NormalisableRange<float>(), 0.0f) } }
 {
     app_properties_.setStorageParameters([&] {
         juce::PropertiesFile::Options opt;
@@ -46,6 +46,7 @@ PluginProcessor::PluginProcessor()
     plugin_list_.addChangeListener(this);
 
     shared_data_manager_.addListener(this);
+    this->addListener(this);
 }
 
 PluginProcessor::~PluginProcessor()
@@ -121,6 +122,7 @@ void PluginProcessor::changeProgramName(int index, const juce::String& newName)
 //==============================================================================
 void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
 
     active_ = true;
@@ -140,6 +142,7 @@ void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 void PluginProcessor::releaseResources()
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
 
     active_ = false;
@@ -152,6 +155,7 @@ void PluginProcessor::releaseResources()
 
 void PluginProcessor::reset()
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
 
     if (inner_ != nullptr)
@@ -174,7 +178,7 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 {
     jassert(!isUsingDoublePrecision());
 
-    const juce::ScopedLock sl(inner_mutex_);
+    const juce::ScopedLock sl(inner_mutex_); // todo: add NonRealtimeMutatable
 
     if (inner_ != nullptr)
     {
@@ -213,7 +217,7 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
 //==============================================================================
 void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    const juce::ScopedLock sl(inner_mutex_);
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     juce::XmlElement xml("state");
 
@@ -221,6 +225,8 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
     groupNode->addTextElement(juce::String { group_ });
     xml.addChildElement(groupNode.release());
 
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    const juce::ScopedLock sl(inner_mutex_);
     if (inner_ != nullptr)
     {
         xml.setAttribute(kEditorStyleTag, (int) editor_style_);
@@ -236,7 +242,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
     }
 
     xml.setAttribute("accept_changes", accept_changes_);
-    xml.setAttribute("propagate_changes", propagate_changes_);
+    xml.setAttribute("propagate_changes", propagate_changes_.load());
 
     xml.writeTo(juce::File { "~/Desktop/test.xml" });
 
@@ -250,7 +256,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 
 void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    const juce::ScopedLock sl(inner_mutex_);
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), (size_t) sizeInBytes));
 
@@ -259,17 +265,21 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
         juce::PluginDescription pd;
         pd.loadFromXml(*pluginNode);
 
-        juce::MemoryBlock innerState;
-        innerState.fromBase64Encoding(xml->getChildElementAllSubText(kInnerStateTag, {}));
+        {
+            jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+            const juce::ScopedLock sl(inner_mutex_);
+            juce::MemoryBlock inner_state;
+            inner_state.fromBase64Encoding(xml->getChildElementAllSubText(kInnerStateTag, {}));
 
-        createSharedPluginInstance(pd,
-            (EditorStyle) xml->getIntAttribute(kEditorStyleTag, 0),
-            innerState);
+            createSharedPluginInstance(pd,
+                (EditorStyle) xml->getIntAttribute(kEditorStyleTag, 0),
+                inner_state);
+        }
 
         group_ = xml->getIntAttribute(kGroupTag, 0);
 
         accept_changes_ = xml->getBoolAttribute("accept_changes");
-        propagate_changes_ = xml->getBoolAttribute("propagate_changes");
+        propagate_changes_.store(xml->getBoolAttribute("propagate_changes"));
     }
 
     // You should use this method to restore your parameters from this memory block,
@@ -280,12 +290,16 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
     int parameterIndex,
     float newValue)
 {
-    const juce::ScopedLock sl(inner_mutex_);
+    if (processor != inner_.get()) return;
 
-    jassert(processor == inner_.get());
+    {
+        const juce::ScopedLock sl(inner_mutex_);
+        jassert(processor == inner_.get());
+    }
 
-    notifyHost();
-    if (propagate_changes_)
+    notifyHost(); // todo: call this async
+
+    if (propagate_changes_.load())
     {
         shared_data_manager_.updateParameterValue(this, parameterIndex, newValue);
     }
@@ -297,10 +311,12 @@ void PluginProcessor::audioProcessorChanged([[maybe_unused]] AudioProcessor* pro
 
 void PluginProcessor::propagateState()
 {
-    const juce::ScopedLock sl(inner_mutex_);
-
     juce::MemoryBlock mb;
-    inner_->getStateInformation(mb);
+    {
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+        const juce::ScopedLock sl(inner_mutex_);
+        inner_->getStateInformation(mb);
+    }
     shared_data_manager_.updateInnerState(this, mb);
 }
 
@@ -319,14 +335,14 @@ void PluginProcessor::setAcceptChanges(bool accept)
 
 bool PluginProcessor::getPropagateChanges()
 {
-    return propagate_changes_;
+    return propagate_changes_.load();
 }
 
 void PluginProcessor::setPropagateChanges(bool propagate)
 {
-    if (propagate_changes_ == propagate) return;
+    if (propagate_changes_.load() == propagate) return;
 
-    propagate_changes_ = propagate;
+    propagate_changes_.store(propagate);
     notifyHost();
 }
 
@@ -334,6 +350,7 @@ void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDes
 {
     if (inner_plugin_description_.has_value() && pluginDescription.isDuplicateOf(inner_plugin_description_.value()))
     {
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
         const juce::ScopedLock sl(inner_mutex_);
 
         jassert(inner_ != nullptr);
@@ -345,6 +362,7 @@ void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDes
 
 void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     if (!accept_changes_) return;
 
     if (!stateMemoryBlock.isEmpty())
@@ -357,6 +375,7 @@ void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& plug
         {
             jassert(pluginDescription.isDuplicateOf(inner_plugin_description_.value()));
 
+            jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
             const juce::ScopedLock sl(inner_mutex_);
             jassert(inner_ != nullptr);
             inner_->setStateInformation(stateMemoryBlock.getData(), (int) stateMemoryBlock.getSize());
@@ -366,6 +385,7 @@ void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& plug
 
 void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float newValue)
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
 
     jassert(inner_ != nullptr);
@@ -376,11 +396,13 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     auto param = inner_->getHostedParameter(parameterIndex);
     param->setValue(newValue); // Don't notify to avoid infinite loop (listener -> shared -> here -> listener -> ...)
 
+    // todo: call this async
     notifyHost();
 }
 
 void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
 
     const auto callback = [this, mb, pd](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
@@ -467,6 +489,7 @@ void PluginProcessor::createSharedPluginInstance(const juce::PluginDescription& 
 
 void PluginProcessor::callbackRemoveInner()
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
 
     if (inner_ == nullptr)
@@ -500,12 +523,14 @@ bool PluginProcessor::editorNeedsDeletion()
 
 bool PluginProcessor::isPluginLoaded() const
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
     return inner_ != nullptr;
 }
 
 std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor() const
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const juce::ScopedLock sl(inner_mutex_);
     return rawToUniquePtr(inner_->hasEditor() ? inner_->createEditorIfNeeded() : nullptr);
 }
