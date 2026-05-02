@@ -104,5 +104,5 @@ private:
 
     SharedDataManager shared_data_manager_;
     bool accept_changes_ { true };
-    bool propagate_changes_ { true };
+    std::atomic<bool> propagate_changes_ { true };
 };
