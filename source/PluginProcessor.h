@@ -1,6 +1,9 @@
 #pragma once
 
 #include "SharedData.hpp"
+#include "farbot/include/farbot/AsyncCaller.hpp"
+#include "farbot/include/farbot/RealtimeObject.hpp"
+#include "farbot/include/farbot/fifo.hpp"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #if (MSVC)
@@ -58,7 +61,7 @@ public:
     bool getPropagateChanges();
     void setPropagateChanges(bool propagate);
 
-    std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const;
+    std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor();
 
     EditorStyle getEditorStyle() const noexcept;
 
@@ -88,8 +91,10 @@ private:
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)
 
-    juce::CriticalSection inner_mutex_;
-    std::unique_ptr<juce::AudioPluginInstance> inner_;
+    using NRTMAudioPluginInstance = farbot::RealtimeObject<std::shared_ptr<juce::AudioPluginInstance>, farbot::RealtimeObjectOptions::nonRealtimeMutatable>;
+
+    NRTMAudioPluginInstance inner_;
+    std::atomic<bool> is_a_inner_loaded_ { false };
     std::optional<juce::PluginDescription> inner_plugin_description_;
     EditorStyle editor_style_ = EditorStyle {};
     bool active_ { false };
@@ -105,4 +110,7 @@ private:
     SharedDataManager shared_data_manager_;
     bool accept_changes_ { true };
     std::atomic<bool> propagate_changes_ { true };
+
+    farbot::AsyncCaller<farbot::fifo_options::concurrency::multiple> async_caller_;
+    juce::TimedCallback async_call_processing_timer_;
 };
