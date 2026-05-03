@@ -9,17 +9,18 @@ namespace
     constexpr auto kEditorWidth { 750 };
 
     constexpr int kUIUpdateIntervalMs { 22 };
-}
 
-static void doLayout(juce::Component* main, juce::Component& bottom, int bottomHeight, juce::Rectangle<int> bounds)
-{
-    juce::Grid grid;
-    grid.setGap(juce::Grid::Px { kMargin });
-    grid.templateColumns = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
-    grid.templateRows = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } },
-        juce::Grid::TrackInfo { juce::Grid::Px { bottomHeight } } };
-    grid.items = { juce::GridItem { main }, juce::GridItem { bottom }.withMargin({ 0, kMargin, kMargin, kMargin }) };
-    grid.performLayout(bounds);
+    void doLayout(juce::Component* main, juce::Component& bottom, int bottomHeight, juce::Rectangle<int> bounds)
+    {
+        juce::Grid grid;
+        grid.setGap(juce::Grid::Px { kMargin });
+        grid.templateColumns = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
+        grid.templateRows = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } },
+            juce::Grid::TrackInfo { juce::Grid::Px { bottomHeight } } };
+        grid.items = { juce::GridItem { main }, juce::GridItem { bottom }.withMargin({ 0, kMargin, kMargin, kMargin }) };
+        grid.performLayout(bounds);
+    }
+
 }
 
 class PluginLoaderComponent final : public juce::Component

@@ -30,7 +30,6 @@ public:
     }
 
     void addListener(SharedData::Listener* newListener);
-
     void removeListener(SharedData::Listener* listenerToRemove);
 
     void updateInner(const SharedData::Listener* sender, std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd);
