@@ -75,10 +75,6 @@ jobs:
         run: |
           nuget install intelipp.static.win-x64 -Version 2022.3.0.387
 
-      - name: Install Ninja (Windows)
-        if: runner.os == 'Windows'
-        run: choco install ninja
-
       - name: Install macOS Deps
         if: ${{ runner.os == 'macOS' }}
         run: brew install ninja osxutils
@@ -106,7 +102,7 @@ jobs:
 
       - name: Test & Benchmarks
         working-directory: ${{ env.BUILD_DIR }}
-        run: ctest --verbose --output-on-failure
+        run: ctest --verbose --output-on-failure -C Release
 
       - name: Read in .env from CMake # see GitHubENV.cmake
         run: |
