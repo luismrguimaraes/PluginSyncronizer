@@ -156,7 +156,7 @@ private:
 };
 
 PluginEditor::PluginEditor(PluginProcessor& p)
-    : AudioProcessorEditor(&p), processorRef_(p), scopedCallback_(p.plugin_changed_, [this] { pluginChanged(); }), ui_update_timer_ { [this]() { updateUI(); } }
+    : AudioProcessorEditor(&p), processor_ref_(p), scoped_callback_(p.plugin_changed_, [this] { pluginChanged(); }), ui_update_timer_ { [this]() { updateUI(); } }
 {
     loader_ = std::make_unique<PluginLoaderComponent>(p.plugin_format_manager_, p.plugin_list_, [&p](const juce::PluginDescription& pd, EditorStyle editorStyle) {
         p.createSharedPluginInstance(pd, editorStyle);
@@ -164,39 +164,39 @@ PluginEditor::PluginEditor(PluginProcessor& p)
 
     setSize(kEditorWidth, kEditorHeight);
     setResizable(false, false);
-    addAndMakeVisible(closeButton_);
-    addAndMakeVisible(showButton_);
-    addAndMakeVisible(propagateStateButton_);
+    addAndMakeVisible(close_button_);
+    addAndMakeVisible(show_button_);
+    addAndMakeVisible(propagate_state_button_);
     addAndMakeVisible(accept_changes_toggle_);
     addAndMakeVisible(propagate_changes_toggle_);
     addAndMakeVisible(loader_.get());
 
     p.plugin_changed_();
 
-    closeButton_.onClick = [this] { clearPlugin(); };
-    showButton_.onClick = [this] {
+    close_button_.onClick = [this] { clearPlugin(); };
+    show_button_.onClick = [this] {
         jassert(editor_ != nullptr);
         editor_->setVisible(true);
     };
-    propagateStateButton_.onClick = [this] { processorRef_.propagateState(); };
+    propagate_state_button_.onClick = [this] { processor_ref_.propagateState(); };
 
-    accept_changes_toggle_.setToggleState(processorRef_.getAcceptChanges(), juce::NotificationType::dontSendNotification);
+    accept_changes_toggle_.setToggleState(processor_ref_.getAcceptChanges(), juce::NotificationType::dontSendNotification);
     accept_changes_toggle_.onClick = [this] {
-        auto old_value = processorRef_.getAcceptChanges();
-        processorRef_.setAcceptChanges(!old_value);
+        auto old_value = processor_ref_.getAcceptChanges();
+        processor_ref_.setAcceptChanges(!old_value);
         accept_changes_toggle_.setToggleState(!old_value, juce::NotificationType::sendNotification);
     };
-    propagate_changes_toggle_.setToggleState(processorRef_.getPropagateChanges(), juce::NotificationType::dontSendNotification);
+    propagate_changes_toggle_.setToggleState(processor_ref_.getPropagateChanges(), juce::NotificationType::dontSendNotification);
     propagate_changes_toggle_.onClick = [this] {
-        auto old_value = processorRef_.getPropagateChanges();
-        processorRef_.setPropagateChanges(!old_value);
+        auto old_value = processor_ref_.getPropagateChanges();
+        processor_ref_.setPropagateChanges(!old_value);
         propagate_changes_toggle_.setToggleState(!old_value, juce::NotificationType::sendNotification);
     };
 
-    addAndMakeVisible(inspectButton_);
+    addAndMakeVisible(inspect_button_);
 
     // this chunk of code instantiates and opens the melatonin inspector
-    inspectButton_.onClick = [&] {
+    inspect_button_.onClick = [&] {
         if (!inspector_)
         {
             inspector_ = std::make_unique<melatonin::Inspector>(*this);
@@ -233,12 +233,12 @@ void PluginEditor::resized()
     // inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre (100, 50));
 
     auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
-    closeButton_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
-    showButton_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
-    propagateStateButton_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
+    close_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
+    show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
+    propagate_state_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
 
-    accept_changes_toggle_.setBounds(closeButton_.getBounds().withX(0));
-    propagate_changes_toggle_.setBounds(showButton_.getBounds().withX(0));
+    accept_changes_toggle_.setBounds(close_button_.getBounds().withX(0));
+    propagate_changes_toggle_.setBounds(show_button_.getBounds().withX(0));
 
     loader_->setBounds(getLocalBounds());
 }
@@ -253,12 +253,12 @@ void PluginEditor::childBoundsChanged([[maybe_unused]] Component* child)
 
 void PluginEditor::setScaleFactor(float scale)
 {
-    currentScaleFactor_ = scale;
+    current_scale_factor_ = scale;
     AudioProcessorEditor::setScaleFactor(scale);
 
     [[maybe_unused]] const auto posted = juce::MessageManager::callAsync([ref = SafePointer<PluginEditor>(this), scale] {
         if (auto* r = ref.getComponent())
-            if (auto* e = r->innerEditorComponent_)
+            if (auto* e = r->inner_editor_component_)
                 e->setScaleFactor(scale);
     });
 
@@ -267,28 +267,28 @@ void PluginEditor::setScaleFactor(float scale)
 
 void PluginEditor::pluginChanged()
 {
-    closeButton_.setVisible(processorRef_.isPluginLoaded());
-    showButton_.setVisible(processorRef_.isPluginLoaded());
-    propagateStateButton_.setVisible(processorRef_.isPluginLoaded());
+    close_button_.setVisible(processor_ref_.isPluginLoaded());
+    show_button_.setVisible(processor_ref_.isPluginLoaded());
+    propagate_state_button_.setVisible(processor_ref_.isPluginLoaded());
 
-    if (processorRef_.editorNeedsDeletion() || !processorRef_.isPluginLoaded())
+    if (processor_ref_.editorNeedsDeletion() || !processor_ref_.isPluginLoaded())
     {
-        innerEditorComponent_ = nullptr;
+        inner_editor_component_ = nullptr;
         editor_ = nullptr;
         setSize(kEditorWidth, kEditorHeight);
         return;
     }
 
-    auto editorComponent = std::make_unique<PluginEditorComponent>(processorRef_.createInnerEditor(), [this] {
+    auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor(), [this] {
         [[maybe_unused]] const auto posted = juce::MessageManager::callAsync([this] { clearPlugin(); });
         jassert(posted);
     });
 
-    editorComponent->setScaleFactor(currentScaleFactor_);
-    innerEditorComponent_ = editorComponent.get();
+    editorComponent->setScaleFactor(current_scale_factor_);
+    inner_editor_component_ = editorComponent.get();
 
     editor_ = [&]() -> std::unique_ptr<Component> {
-        switch (processorRef_.getEditorStyle())
+        switch (processor_ref_.getEditorStyle())
         {
             case EditorStyle::thisWindow:
                 addAndMakeVisible(editorComponent.get());
@@ -297,7 +297,7 @@ void PluginEditor::pluginChanged()
 
             case EditorStyle::newWindow:
                 const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
-                auto window = std::make_unique<ScaledDocumentWindow>(bg, currentScaleFactor_);
+                auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_);
                 window->setAlwaysOnTop(true);
                 window->setContentOwned(editorComponent.release(), true);
                 window->centreAroundComponent(this, window->getWidth(), window->getHeight());
@@ -313,10 +313,10 @@ void PluginEditor::pluginChanged()
 
 void PluginEditor::clearPlugin()
 {
-    processorRef_.removeInner();
+    processor_ref_.removeInner();
 }
 
 void PluginEditor::updateUI()
 {
-    loader_->setVisible(!processorRef_.isPluginLoaded());
+    loader_->setVisible(!processor_ref_.isPluginLoaded());
 }

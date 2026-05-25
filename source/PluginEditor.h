@@ -27,26 +27,24 @@ private: //NOLINT
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 
-    // ToDo: fix formatting according to README.md
-
-    PluginProcessor& processorRef_;
+    PluginProcessor& processor_ref_;
 
     std::unique_ptr<PluginLoaderComponent> loader_;
     std::unique_ptr<melatonin::Inspector> inspector_;
-    juce::ScopedValueSetter<std::function<void()>> scopedCallback_;
+    juce::ScopedValueSetter<std::function<void()>> scoped_callback_;
     std::unique_ptr<Component> editor_;
 
     juce::TimedCallback ui_update_timer_;
 
-    float currentScaleFactor_ { 1.0f };
+    float current_scale_factor_ { 1.0f };
 
-    juce::TextButton closeButton_ { "Close Plugin" };
-    juce::TextButton showButton_ { "Show Plugin UI" };
-    juce::TextButton propagateStateButton_ { "Propagate State" };
-    juce::TextButton inspectButton_ { "Inspect the UI" };
+    juce::TextButton close_button_ { "Close Plugin" };
+    juce::TextButton show_button_ { "Show Plugin UI" };
+    juce::TextButton propagate_state_button_ { "Propagate State" };
+    juce::TextButton inspect_button_ { "Inspect the UI" };
 
     juce::ToggleButton accept_changes_toggle_ { "Accept Changes" };
     juce::ToggleButton propagate_changes_toggle_ { "Propagate Changes" };
 
-    PluginEditorComponent* innerEditorComponent_ = nullptr;
+    PluginEditorComponent* inner_editor_component_ = nullptr;
 };
