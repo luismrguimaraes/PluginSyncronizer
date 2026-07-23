@@ -1,4 +1,8 @@
 #include "PluginEditor.h"
+#include "MyTableListBoxModel.hpp"
+#include "PluginProcessor.h"
+#include "juce_core/system/juce_PlatformDefs.h"
+#include <memory>
 
 namespace
 {
@@ -9,93 +13,52 @@ namespace
     constexpr auto kEditorWidth { 750 };
 
     constexpr int kUIUpdateIntervalMs { 22 };
-
-    void doLayout(juce::Component* main, juce::Component& bottom, int bottomHeight, juce::Rectangle<int> bounds)
-    {
-        juce::Grid grid;
-        grid.setGap(juce::Grid::Px { kMargin });
-        grid.templateColumns = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
-        grid.templateRows = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } },
-            juce::Grid::TrackInfo { juce::Grid::Px { bottomHeight } } };
-        grid.items = { juce::GridItem { main }, juce::GridItem { bottom }.withMargin({ 0, kMargin, kMargin, kMargin }) };
-        grid.performLayout(bounds);
-    }
-
 }
 
-class PluginLoaderComponent final : public juce::Component
+class PluginLoaderComponent final : public juce::Component, public MyTableListBoxModelDelegate
 {
 public:
     template <typename Callback>
     PluginLoaderComponent(juce::AudioPluginFormatManager& manager,
         juce::KnownPluginList& list,
         Callback&& callback)
-        : pluginListComponent(manager, list, juce::File { "~/Desktop/deadMansFile.txt" }, {})
+        : pluginListComponent_(manager, list, juce::File { "~/Desktop/PluginHostDev/deadMansFile.txt" }, {})
     {
-        pluginListComponent.getTableListBox().setMultipleSelectionEnabled(false);
+        tlm_ = new MyTableListBoxModel { pluginListComponent_, list, this };
+        pluginListComponent_.setTableModel(std::move(tlm_));
+        tlm_ = nullptr;
 
-        addAndMakeVisible(pluginListComponent);
-        addAndMakeVisible(buttons);
+        pluginListComponent_.getTableListBox().setMultipleSelectionEnabled(false);
+        addAndMakeVisible(pluginListComponent_);
 
-        const auto getCallback = [this, &list, cb = std::forward<Callback>(callback)](EditorStyle style) {
-            return [this, &list, cb, style] {
-                const auto index = pluginListComponent.getTableListBox().getSelectedRow();
-                const auto& types = list.getTypes();
+        callback_ = [&list, cb = std::forward<Callback>(callback)](int rowNumber, EditorStyle style) {
+            const auto& types = list.getTypes();
 
-                if (juce::isPositiveAndBelow(index, types.size()))
-                    juce::NullCheckedInvocation::invoke(cb, types.getReference(index), style);
-            };
+            if (juce::isPositiveAndBelow(rowNumber, types.size()))
+                juce::NullCheckedInvocation::invoke(cb, types.getReference(rowNumber), style);
         };
-
-        buttons.thisWindowButton.onClick = getCallback(EditorStyle::thisWindow);
-        buttons.newWindowButton.onClick = getCallback(EditorStyle::newWindow);
     }
 
     void resized() override
     {
-        doLayout(&pluginListComponent, buttons, 80, getLocalBounds());
+        juce::Grid grid;
+        grid.setGap(juce::Grid::Px { kMargin });
+        grid.templateColumns = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
+        grid.templateRows = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
+        grid.items = { juce::GridItem { pluginListComponent_ } };
+        grid.performLayout(getLocalBounds());
+    }
+
+    void openPluginAt(int rowNumber) override
+    {
+        callback_(rowNumber, EditorStyle::newWindow);
     }
 
 private:
-    struct Buttons final : public Component
-    {
-        Buttons()
-        {
-            label.setJustificationType(juce::Justification::centred);
+    juce::PluginListComponent pluginListComponent_;
+    MyTableListBoxModel* tlm_;
 
-            addAndMakeVisible(label);
-            // addAndMakeVisible (thisWindowButton);
-            addAndMakeVisible(newWindowButton);
-        }
-
-        void resized() override
-        {
-            juce::Grid vertical;
-            vertical.autoFlow = juce::Grid::AutoFlow::row;
-            vertical.setGap(juce::Grid::Px { kMargin });
-            vertical.autoRows = vertical.autoColumns = juce::Grid::TrackInfo { juce::Grid::Fr { 1 } };
-            vertical.items.insertMultiple(0, juce::GridItem {}, 2);
-            vertical.performLayout(getLocalBounds());
-
-            label.setBounds(vertical.items[0].currentBounds.toNearestInt());
-
-            juce::Grid grid;
-            grid.autoFlow = juce::Grid::AutoFlow::column;
-            grid.setGap(juce::Grid::Px { kMargin });
-            grid.autoRows = grid.autoColumns = juce::Grid::TrackInfo { juce::Grid::Fr { 1 } };
-            grid.items = { juce::GridItem { thisWindowButton },
-                juce::GridItem { newWindowButton } };
-
-            grid.performLayout(vertical.items[1].currentBounds.toNearestInt());
-        }
-
-        juce::Label label { "", "Select a plugin from the list, then display it using the buttons below." };
-        juce::TextButton thisWindowButton { "Open In This Window" };
-        juce::TextButton newWindowButton { "Open In New Window" };
-    };
-
-    juce::PluginListComponent pluginListComponent;
-    Buttons buttons;
+    std::function<void(int, EditorStyle)> callback_;
 };
 
 class PluginEditorComponent final : public juce::Component
@@ -106,8 +69,6 @@ public:
         : editor(std::move(editorIn))
     {
         addAndMakeVisible(editor.get());
-        // addAndMakeVisible (closeButton);
-
         childBoundsChanged(editor.get());
 
         closeButton.onClick = std::forward<Callback>(onClose);
@@ -119,10 +80,7 @@ public:
             editor->setScaleFactor(scale);
     }
 
-    void resized() override
-    {
-        doLayout(editor.get(), closeButton, kButtonHeight, getLocalBounds());
-    }
+    void resized() override {}
 
     void childBoundsChanged(Component* child) override
     {
@@ -217,21 +175,10 @@ void PluginEditor::paint(juce::Graphics& g)
 {
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
-
-    // auto area = getLocalBounds();
-    // g.setColour (juce::Colours::white);
-    // g.setFont (16.0f);
-    // auto helloWorld = juce::String ("Hello from ") + PRODUCT_NAME_WITHOUT_VERSION + " v" VERSION + " running in " + CMAKE_BUILD_TYPE;
-    // g.drawText (helloWorld, area.removeFromTop (150), juce::Justification::centred, false);
 }
 
 void PluginEditor::resized()
 {
-    // // layout the positions of your child components here
-    // auto area = getLocalBounds();
-    // area.removeFromBottom (50);
-    // inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre (100, 50));
-
     auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
     close_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
     show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
