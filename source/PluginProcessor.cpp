@@ -25,6 +25,7 @@ namespace
 
     void readJuceBuffer(juce::AudioBuffer<float>& buffer, std::vector<std::vector<float>>& debugger);
 }
+
 //==============================================================================
 PluginProcessor::PluginProcessor()
     : AudioProcessor(BusesProperties()
