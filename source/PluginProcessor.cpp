@@ -1,7 +1,7 @@
 #include "PluginProcessor.h"
-#include "PluginEditor.h"
 #include "SharedData.hpp"
 #include "farbot/include/farbot/RealtimeObject.hpp"
+#include "gui/PluginEditor.h"
 #include "juce_core/system/juce_PlatformDefs.h"
 #include <algorithm>
 #include <cstddef>
@@ -282,7 +282,7 @@ bool PluginProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* PluginProcessor::createEditor()
 {
-    return new PluginEditor(*this);
+    return new gui::PluginEditor(*this);
 }
 
 //==============================================================================
