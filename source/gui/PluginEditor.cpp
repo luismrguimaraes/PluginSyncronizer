@@ -152,7 +152,7 @@ namespace gui
             propagate_changes_toggle_.setToggleState(!old_value, juce::NotificationType::sendNotification);
         };
 
-        addAndMakeVisible(inspect_button_);
+        // addAndMakeVisible(inspect_button_);
 
         // this chunk of code instantiates and opens the melatonin inspector
         inspect_button_.onClick = [&] {
@@ -215,9 +215,7 @@ namespace gui
 
     void PluginEditor::pluginChanged()
     {
-        close_button_.setVisible(processor_ref_.isPluginLoaded());
-        show_button_.setVisible(processor_ref_.isPluginLoaded());
-        propagate_state_button_.setVisible(processor_ref_.isPluginLoaded());
+        updateComponentsVisibility();
 
         if (processor_ref_.editorNeedsDeletion() || !processor_ref_.isPluginLoaded())
         {
@@ -265,6 +263,20 @@ namespace gui
 
     void PluginEditor::updateUI()
     {
-        loader_->setVisible(!processor_ref_.isPluginLoaded());
+        updateComponentsVisibility();
     }
+
+    void PluginEditor::updateComponentsVisibility()
+    {
+        auto is_loaded = processor_ref_.isPluginLoaded();
+
+        close_button_.setVisible(is_loaded);
+        show_button_.setVisible(is_loaded);
+        accept_changes_toggle_.setVisible(is_loaded);
+        propagate_changes_toggle_.setVisible(is_loaded);
+        propagate_state_button_.setVisible(is_loaded);
+
+        loader_->setVisible(!is_loaded);
+    }
+
 }
