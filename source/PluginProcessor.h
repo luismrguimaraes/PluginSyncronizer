@@ -5,6 +5,7 @@
 #include "farbot/include/farbot/RealtimeObject.hpp"
 #include "farbot/include/farbot/fifo.hpp"
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <vector>
 
 #if (MSVC)
     #include "ipps.h"
@@ -61,7 +62,7 @@ public:
     bool getPropagateChanges();
     void setPropagateChanges(bool propagate);
 
-    std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor();
+    std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const;
 
     EditorStyle getEditorStyle() const noexcept;
 
@@ -79,6 +80,10 @@ public:
 
     void notifyHost();
 
+    void numChannelsChanged() override;
+    void numBusesChanged() override;
+    void processorLayoutsChanged() override;
+
 public:
     juce::ApplicationProperties app_properties_;
     juce::AudioPluginFormatManager plugin_format_manager_;
@@ -88,19 +93,22 @@ public:
 private:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
 
+    bool prepareInstance(juce::AudioPluginInstance* instance, double sampleRate, int samplesPerBlock);
+
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)
 
     using NRTMAudioPluginInstance = farbot::RealtimeObject<std::shared_ptr<juce::AudioPluginInstance>, farbot::RealtimeObjectOptions::nonRealtimeMutatable>;
 
-    NRTMAudioPluginInstance inner_;
-    std::atomic<bool> is_a_inner_loaded_ { false };
+    mutable NRTMAudioPluginInstance inner_;
     std::optional<juce::PluginDescription> inner_plugin_description_;
     EditorStyle editor_style_ = EditorStyle {};
-    bool active_ { false };
     juce::ScopedMessageBox message_box_;
 
+    std::atomic<bool> is_a_inner_loaded_ { false };
     std::atomic<bool> editor_needs_deletion_ { false };
+    std::atomic<bool> inner_prepared_ { false };
+    std::atomic<bool> are_we_playing_ { false };
 
     juce::AudioBuffer<float> float_process_buffer_;
     juce::AudioProcessorValueTreeState apvts_;
@@ -113,4 +121,7 @@ private:
 
     farbot::AsyncCaller<farbot::fifo_options::concurrency::multiple> async_caller_;
     juce::TimedCallback async_call_processing_timer_;
+
+    std::vector<std::vector<float>> juce_input_buffer_debugger_;
+    std::vector<std::vector<float>> juce_output_buffer_debugger_;
 };

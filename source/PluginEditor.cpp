@@ -291,7 +291,7 @@ void PluginEditor::pluginChanged()
         switch (processor_ref_.getEditorStyle())
         {
             case EditorStyle::thisWindow:
-                addAndMakeVisible(editorComponent.get());
+                addChildComponent(editorComponent.get());
                 setSize(editorComponent->getWidth(), editorComponent->getHeight());
                 return std::move(editorComponent);
 
@@ -301,7 +301,6 @@ void PluginEditor::pluginChanged()
                 window->setAlwaysOnTop(true);
                 window->setContentOwned(editorComponent.release(), true);
                 window->centreAroundComponent(this, window->getWidth(), window->getHeight());
-                window->setVisible(true);
                 window->setUsingNativeTitleBar(true);
                 return window;
         }

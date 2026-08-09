@@ -16,12 +16,21 @@ namespace
     constexpr const char* kEditorStyleTag = "editor_style";
 
     constexpr int kAsyncCallProcessingMs { 5 };
+    constexpr int kSupportedNumChannels { 2 };
+
+    constexpr bool kInput { true };
+    constexpr bool kOutput { false };
+    constexpr int kMainBus { 0 };
+    constexpr int kSidechainBus { 1 };
+
+    void readJuceBuffer(juce::AudioBuffer<float>& buffer, std::vector<std::vector<float>>& debugger);
 }
 //==============================================================================
 PluginProcessor::PluginProcessor()
     : AudioProcessor(BusesProperties()
 #if !JucePlugin_IsMidiEffect
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
+                         .withInput("Sidechain", juce::AudioChannelSet::stereo(), false)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)
 #endif
             ),
@@ -127,56 +136,99 @@ void PluginProcessor::changeProgramName(int index, const juce::String& newName)
 //==============================================================================
 void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
-    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+    // VST3 in REAPER may call this in audio thread
+    // E.g. when setting the sidechain buffer
 
-    active_ = true;
+    inner_prepared_.store(false);
 
-    setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
+    async_caller_.callAsync([sampleRate, samplesPerBlock, this]() {
+        if (!isBusesLayoutSupported(getBusesLayout())) return;
 
-    if (*inner != nullptr)
-    {
-        (*inner)->setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
-        (*inner)->prepareToPlay(sampleRate, samplesPerBlock);
-    }
+        setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
 
-    float_process_buffer_ = juce::AudioBuffer<float> { 2, samplesPerBlock };
-    // // Use this method as the place to do any pre-playback
-    // // initialisation that you need..
-    // juce::ignoreUnused (sampleRate, samplesPerBlock);
+        { // DEBUG
+            juce_input_buffer_debugger_.resize(static_cast<size_t>(getTotalNumInputChannels()));
+            for (auto& buffer : juce_input_buffer_debugger_)
+            {
+                buffer.resize(static_cast<size_t>(samplesPerBlock));
+            }
+            juce_output_buffer_debugger_.resize(static_cast<size_t>(getTotalNumOutputChannels()));
+            for (auto& buffer : juce_output_buffer_debugger_)
+            {
+                buffer.resize(static_cast<size_t>(samplesPerBlock));
+            }
+        }
+
+        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+        if ((*inner) != nullptr)
+        {
+            auto success = prepareInstance((*inner).get(), sampleRate, samplesPerBlock);
+            if (!success)
+            {
+                auto options = juce::MessageBoxOptions::makeOptionsOk(juce::MessageBoxIconType::WarningIcon,
+                    "Could not prepare plugin. Removing it...",
+                    "");
+                message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
+                removeInner();
+            }
+            else
+            {
+                inner_prepared_.store(true);
+            }
+        }
+
+        float_process_buffer_ = juce::AudioBuffer<float> { std::max(getTotalNumInputChannels(), getTotalNumOutputChannels()), samplesPerBlock };
+
+        are_we_playing_.store(true);
+    });
 }
 
 void PluginProcessor::releaseResources()
 {
-    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
-    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+    // VST3 in REAPER may call this in audio thread
+    // E.g. when setting the sidechain buffer
 
-    active_ = false;
+    are_we_playing_.store(false);
 
-    if (*inner != nullptr)
-        (*inner)->releaseResources();
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
+    async_caller_.callAsync([this]() {
+        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+
+        inner_prepared_.store(false);
+        if (*inner != nullptr)
+            (*inner)->releaseResources();
+    });
 }
 
 void PluginProcessor::reset()
 {
-    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
-    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+    // CLAP in REAPER and VST3 in Bitwig calls reset in audio thread
+    async_caller_.callAsync([this]() {
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
 
-    if (*inner != nullptr)
-        (*inner)->reset();
+        if (*inner != nullptr)
+            (*inner)->reset();
+    });
 }
 
 bool PluginProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    const auto& mainOutput = layouts.getMainOutputChannelSet();
-    const auto& mainInput = layouts.getMainInputChannelSet();
+    const auto& main_output = layouts.getMainOutputChannelSet();
+    const auto& main_input = layouts.getMainInputChannelSet();
 
-    if (mainInput != mainOutput)
-        return false;
+    if (layouts.getBuses(kInput).size() > 2) return false;
 
-    return true;
+    auto main_buses_size_supported = main_output.size() == kSupportedNumChannels && main_input.size() == kSupportedNumChannels;
+
+    if (auto has_sidechain_bus = layouts.getBuses(kInput).size() == 2)
+    {
+        const auto& sidechain_input = layouts.getChannelSet(kInput, kSidechainBus);
+        auto sidechain_bus_size_supported = sidechain_input.size() <= kSupportedNumChannels;
+
+        return sidechain_bus_size_supported && main_buses_size_supported;
+    }
+
+    return main_buses_size_supported;
 }
 
 void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
@@ -184,12 +236,24 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 {
     jassert(!isUsingDoublePrecision());
 
+    if (!inner_prepared_.load() || !are_we_playing_.load()) return;
+
+    // auto temp1 = buffer.getReadPointer(0);
+    // auto temp2 = buffer.getArrayOfReadPointers();
+
+    // readJuceBuffer(buffer, juce_input_buffer_debugger_);
+    // auto& temp_buff = juce_input_buffer_debugger_;
+
     // todo: add test to check if this ever allocates
-    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime> inner(inner_);
+    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime>
+        inner(inner_);
     if (*inner != nullptr)
     {
         (*inner)->processBlock(buffer, midiMessages);
     }
+
+    // readJuceBuffer(buffer, juce_output_buffer_debugger_);
+    // auto& temp_buff2 = juce_output_buffer_debugger_;
 }
 
 void PluginProcessor::processBlock(juce::AudioBuffer<double>& buffer,
@@ -250,7 +314,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
     xml.setAttribute("accept_changes", accept_changes_);
     xml.setAttribute("propagate_changes", propagate_changes_.load());
 
-    xml.writeTo(juce::File { "~/Desktop/test.xml" });
+    xml.writeTo(juce::File { "~/Desktop/PluginHostDev/test.xml" });
 
     const auto text = xml.toString();
     destData.replaceAll(text.toRawUTF8(), text.getNumBytesAsUTF8());
@@ -409,6 +473,11 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     const auto callback = [this, mb, pd](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
+        {
+            auto temp = instance->getPluginDescription().createXml();
+            temp->writeTo(juce::File { "~/Desktop/PluginHostDev/plugin_description.xml" });
+        }
+
         if (error.isNotEmpty())
         {
             auto options = juce::MessageBoxOptions::makeOptionsOk(juce::MessageBoxIconType::WarningIcon,
@@ -418,40 +487,31 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
             return;
         }
 
-        editor_style_ = EditorStyle::newWindow;
-        inner_plugin_description_ = pd;
-
         jassert(instance != nullptr);
         if (!mb.isEmpty())
             instance->setStateInformation(mb.getData(), (int) mb.getSize());
 
-        // In a 'real' plugin, we'd also need to set the bus configuration of the instance plugin.
-        // One possibility would be to match the bus configuration of the wrapper plugin, but
-        // the instance plugin isn't guaranteed to support the same layout. Alternatively, we
-        // could try to apply a reasonably similar layout, and maintain a mapping between the
-        // instance/outer channel layouts.
-        //
-        // In any case, it is essential that the instance plugin is told about the bus
-        // configuration that will be used. The AudioBuffer passed to the instance plugin must also
-        // exactly match this layout.
-        //
-        // ToDo: this ^
-
-        if (active_)
+        if (are_we_playing_.load())
         {
-            instance->setRateAndBufferSizeDetails(getSampleRate(), getBlockSize());
-            // if (!instance->setBusesLayout (getBusesLayout()))
-            // {
-            //     std::cout << "Layout not supported\n";
-            // }
-            instance->prepareToPlay(getSampleRate(), getBlockSize());
+            auto success = prepareInstance(instance.get(), getSampleRate(), getBlockSize());
+            if (!success)
+            {
+                auto options = juce::MessageBoxOptions::makeOptionsOk(juce::MessageBoxIconType::WarningIcon,
+                    "Could not prepare plugin. Cancelling load...",
+                    "");
+                message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
+                return;
+            }
         }
 
+        editor_style_ = EditorStyle::newWindow;
+        inner_plugin_description_ = pd;
         instance->addListener(this);
 
         {
             NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
             *inner = std::move(instance);
+            inner_prepared_.store(true);
             is_a_inner_loaded_.store(true);
         }
 
@@ -480,16 +540,6 @@ void PluginProcessor::createSharedPluginInstance(const juce::PluginDescription& 
         if (instance != nullptr && !mb.isEmpty())
             instance->setStateInformation(mb.getData(), (int) mb.getSize());
 
-        if (active_)
-        {
-            instance->setRateAndBufferSizeDetails(getSampleRate(), getBlockSize());
-            // if (!instance->setBusesLayout (getBusesLayout()))
-            // {
-            //     std::cout << "Layout not supported\n";
-            // }
-            instance->prepareToPlay(getSampleRate(), getBlockSize());
-        }
-
         shared_data_manager_.updateInner(this, std::move(instance), pd);
     };
 
@@ -504,9 +554,11 @@ void PluginProcessor::callbackRemoveInner()
     if (*inner == nullptr)
         return;
 
+    inner_prepared_.store(false);
     editor_needs_deletion_.store(true);
     juce::NullCheckedInvocation::invoke(plugin_changed_); // make PluginEditor delete inner editor
     *inner = nullptr;
+
     is_a_inner_loaded_.store(false);
     inner_plugin_description_.reset();
     shared_data_manager_.removeInner();
@@ -519,6 +571,33 @@ void PluginProcessor::notifyHost()
 {
     auto change_details = AudioProcessorListener::ChangeDetails {};
     updateHostDisplay(change_details.withParameterInfoChanged(true).withNonParameterStateChanged(true));
+}
+
+void PluginProcessor::numChannelsChanged()
+{
+}
+
+void PluginProcessor::numBusesChanged()
+{
+    jassertfalse;
+}
+
+void PluginProcessor::processorLayoutsChanged()
+{
+    async_caller_.callAsync([this]() {
+        if (!isBusesLayoutSupported(getBusesLayout())) return;
+
+        prepareToPlay(getSampleRate(), getBlockSize());
+
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+        {
+            NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+            if ((*inner) != nullptr)
+            {
+                (*inner)->processorLayoutsChanged();
+            }
+        }
+    });
 }
 
 void PluginProcessor::removeInner()
@@ -536,7 +615,7 @@ bool PluginProcessor::isPluginLoaded() const
     return is_a_inner_loaded_.load();
 }
 
-std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor()
+std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor() const
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
@@ -561,9 +640,94 @@ void PluginProcessor::changeListenerCallback(juce::ChangeBroadcaster* source)
     }
 }
 
+bool PluginProcessor::prepareInstance(juce::AudioPluginInstance* instance, double sampleRate, int samplesPerBlock)
+{
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    jassert(instance != nullptr);
+
+    auto new_bus_layout = getBusesLayout();
+    auto num_buses_in = new_bus_layout.inputBuses.size();
+    auto in_ch_count = new_bus_layout.inputBuses.getFirst().size();
+    auto num_buses_out = new_bus_layout.outputBuses.size();
+    auto out_ch_count = new_bus_layout.outputBuses.getFirst().size();
+
+    const std::int64_t kIterationCeil { 100 };
+
+    auto bus_matcher = [&instance, &new_bus_layout](bool is_input) {
+        auto our_size = new_bus_layout.getBuses(is_input).size();
+
+        std::int64_t iter_count { 0 };
+        for (; iter_count < kIterationCeil; ++iter_count)
+        {
+            auto instance_size = instance->getBusesLayout().getBuses(is_input).size();
+            if (our_size == instance_size) break;
+
+            if (our_size > instance_size)
+            {
+                if (!instance->canAddBus(is_input)) break;
+                instance->addBus(is_input);
+            }
+            else
+            {
+                if (!instance->canRemoveBus(is_input)) break;
+                instance->removeBus(is_input);
+            }
+        }
+        jassert(iter_count < kIterationCeil);
+    };
+
+    bus_matcher(kInput);
+    bus_matcher(kOutput);
+
+    auto num_channels_matcher = [this, &instance](bool is_input, int bus_index) -> bool {
+        auto instance_bus = instance->getBus(is_input, bus_index);
+
+        auto our_num_channels = getBus(is_input, bus_index)->getNumberOfChannels();
+        auto success = instance_bus->setNumberOfChannels(our_num_channels);
+
+        return success;
+    };
+
+    if (auto failed = instance->getBusCount(kInput) > 0 && !num_channels_matcher(kInput, kMainBus))
+    {
+        return false;
+    }
+    if (auto failed = instance->getBusCount(kOutput) > 0 && !num_channels_matcher(kOutput, kMainBus))
+    {
+        return false;
+    }
+    if (instance->getBusCount(kInput) > 1)
+    {
+        // Sidechain bus
+        if (auto failed = !num_channels_matcher(kInput, kSidechainBus))
+        {
+            return false;
+        }
+    }
+
+    instance->setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
+    instance->prepareToPlay(sampleRate, samplesPerBlock);
+
+    return true;
+}
+
 //==============================================================================
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new PluginProcessor();
+}
+
+namespace
+{
+    void readJuceBuffer(juce::AudioBuffer<float>& buffer, std::vector<std::vector<float>>& debugger)
+    {
+        for (auto ch = 0; ch < buffer.getNumChannels(); ++ch)
+        {
+            for (auto i = 0; i < buffer.getNumSamples(); ++i)
+            {
+                debugger[ch][i] = buffer.getSample(ch, i);
+            }
+        }
+    }
 }
