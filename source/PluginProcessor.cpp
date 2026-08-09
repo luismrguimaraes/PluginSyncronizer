@@ -23,7 +23,6 @@ namespace
     constexpr int kMainBus { 0 };
     constexpr int kSidechainBus { 1 };
 
-    void readJuceBuffer(juce::AudioBuffer<float>& buffer, std::vector<std::vector<float>>& debugger);
 }
 
 //==============================================================================
@@ -147,20 +146,10 @@ void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
         setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
 
-        { // DEBUG
-            juce_input_buffer_debugger_.resize(static_cast<size_t>(getTotalNumInputChannels()));
-            for (auto& buffer : juce_input_buffer_debugger_)
-            {
-                buffer.resize(static_cast<size_t>(samplesPerBlock));
-            }
-            juce_output_buffer_debugger_.resize(static_cast<size_t>(getTotalNumOutputChannels()));
-            for (auto& buffer : juce_output_buffer_debugger_)
-            {
-                buffer.resize(static_cast<size_t>(samplesPerBlock));
-            }
-        }
+        juce_debugger_.prepareToPlay(samplesPerBlock, getTotalNumInputChannels(), getTotalNumOutputChannels());
 
-        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime>
+            inner(inner_);
         if ((*inner) != nullptr)
         {
             auto success = prepareInstance((*inner).get(), sampleRate, samplesPerBlock);
@@ -239,11 +228,7 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     if (!inner_prepared_.load() || !are_we_playing_.load()) return;
 
-    // auto temp1 = buffer.getReadPointer(0);
-    // auto temp2 = buffer.getArrayOfReadPointers();
-
-    // readJuceBuffer(buffer, juce_input_buffer_debugger_);
-    // auto& temp_buff = juce_input_buffer_debugger_;
+    juce_debugger_.processInput(buffer);
 
     // todo: add test to check if this ever allocates
     NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime>
@@ -253,8 +238,7 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         (*inner)->processBlock(buffer, midiMessages);
     }
 
-    // readJuceBuffer(buffer, juce_output_buffer_debugger_);
-    // auto& temp_buff2 = juce_output_buffer_debugger_;
+    juce_debugger_.processOutput(buffer);
 }
 
 void PluginProcessor::processBlock(juce::AudioBuffer<double>& buffer,
@@ -585,6 +569,9 @@ void PluginProcessor::numBusesChanged()
 
 void PluginProcessor::processorLayoutsChanged()
 {
+    // VST3 in REAPER may call this in audio thread
+    // E.g. when setting the sidechain buffer
+
     async_caller_.callAsync([this]() {
         if (!isBusesLayoutSupported(getBusesLayout())) return;
 
@@ -717,18 +704,4 @@ bool PluginProcessor::prepareInstance(juce::AudioPluginInstance* instance, doubl
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new PluginProcessor();
-}
-
-namespace
-{
-    void readJuceBuffer(juce::AudioBuffer<float>& buffer, std::vector<std::vector<float>>& debugger)
-    {
-        for (auto ch = 0; ch < buffer.getNumChannels(); ++ch)
-        {
-            for (auto i = 0; i < buffer.getNumSamples(); ++i)
-            {
-                debugger[ch][i] = buffer.getSample(ch, i);
-            }
-        }
-    }
 }

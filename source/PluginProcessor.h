@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SharedData.hpp"
+#include "debug/DebugUtils.hpp"
 #include "farbot/include/farbot/AsyncCaller.hpp"
 #include "farbot/include/farbot/RealtimeObject.hpp"
 #include "farbot/include/farbot/fifo.hpp"
@@ -122,6 +123,5 @@ private:
     farbot::AsyncCaller<farbot::fifo_options::concurrency::multiple> async_caller_;
     juce::TimedCallback async_call_processing_timer_;
 
-    std::vector<std::vector<float>> juce_input_buffer_debugger_;
-    std::vector<std::vector<float>> juce_output_buffer_debugger_;
+    JuceDebugger juce_debugger_;
 };
