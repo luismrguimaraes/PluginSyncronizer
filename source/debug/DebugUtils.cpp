@@ -20,7 +20,7 @@ namespace
             debugger[ch].resize(num_samples);
             for (size_t i = 0; i < num_samples; ++i)
             {
-                debugger[ch][i] = buffer.getSample(ch, i);
+                debugger[ch][i] = buffer.getSample(static_cast<int>(ch), static_cast<int>(i));
             }
         }
     }

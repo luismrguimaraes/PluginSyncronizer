@@ -3,6 +3,7 @@
 #include <array>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_core/juce_core.h>
+#include <optional>
 
 struct SharedData
 {
@@ -15,7 +16,6 @@ struct SharedData
         virtual void callbackRemoveInner() = 0;
     };
 
-    std::unique_ptr<juce::AudioPluginInstance> inner;
     std::optional<juce::PluginDescription> plugin_description;
 
     std::vector<SharedData::Listener*> listeners;
@@ -29,6 +29,9 @@ public:
         shared_data_->listeners.reserve(10);
     }
 
+    void getStateInformation(juce::MemoryBlock& destData);
+    void setStateInformation(const void* data, int sizeInBytes);
+
     void addListener(SharedData::Listener* newListener);
     void removeListener(SharedData::Listener* listenerToRemove);
 
@@ -37,6 +40,8 @@ public:
     void updateParameterValue(const SharedData::Listener* sender, int parameterIndex, float newValue);
 
     void removeInner();
+
+    std::optional<juce::PluginDescription> getPluginDescription();
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SharedDataManager)

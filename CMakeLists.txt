@@ -44,6 +44,10 @@ set(FORMATS Standalone AU VST3 AUv3)
 set(CMAKE_POLICY_DEFAULT_CMP0141        NEW      CACHE STRING "" FORCE)
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "" FORCE)
 
+# adjust release optimization level
+# set(CMAKE_CXX_FLAGS_RELEASE "-O1 -DNDEBUG")
+# message("${CMAKE_CXX_FLAGS_RELEASE}")
+
 # For simplicity, the name of the CMake project is also the name of the target
 project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
 
@@ -107,7 +111,7 @@ clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
     CLAP_ID "${BUNDLE_ID}"
     CLAP_FEATURES instrument)
 
-# Enable fast math, C++20 and a few other target defaults
+# Enable fast math, a specific C++ version and a few other target defaults
 include(SharedCodeDefaults)
 
 
@@ -185,3 +189,8 @@ include(Benchmarks)
 
 # Output some config for CI (like our PRODUCT_NAME)
 include(GitHubENV)
+
+target_compile_definitions(SharedCode INTERFACE
+    $<$<CONFIG:Debug>:DEBUG>
+    $<$<CONFIG:Release>:RELEASE>
+)
