@@ -58,5 +58,7 @@ namespace gui
 
         juce::ToggleButton accept_changes_toggle_ { "Accept Changes" };
         juce::ToggleButton propagate_changes_toggle_ { "Propagate Changes" };
+
+        juce::Label inner_name_;
     };
 }

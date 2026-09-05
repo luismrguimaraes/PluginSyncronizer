@@ -34,6 +34,11 @@ void SharedDataManager::setStateInformation(const void* data, int sizeInBytes)
         juce::PluginDescription pd;
         pd.loadFromXml(*plugin_description_node);
         shared_data_->plugin_description = pd;
+
+        for (auto& listener : shared_data_->listeners)
+        {
+            listener->callbackLoadInner(shared_data_->plugin_description.value());
+        }
     }
 }
 

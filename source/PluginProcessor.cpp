@@ -384,7 +384,6 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
             if (processor != (*inner).get()) return;
         }
 
-        notifyHost();
         if (propagate_changes_.load())
         {
             shared_data_manager_.updateParameterValue(this, parameterIndex, newValue);
@@ -540,7 +539,6 @@ bool PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 
     juce::NullCheckedInvocation::invoke(plugin_changed_);
 
-    notifyHost();
     return true;
 }
 
@@ -551,6 +549,14 @@ void PluginProcessor::createSharedPluginInstance(const juce::PluginDescription& 
     auto success = setNewPlugin(pd, {});
     if (success)
         shared_data_manager_.updateInnerPd(this, pd);
+    notifyHost();
+}
+
+std::optional<juce::PluginDescription> PluginProcessor::getPluginDescription()
+{
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+
+    return inner_plugin_description_;
 }
 
 void PluginProcessor::callbackRemoveInner()

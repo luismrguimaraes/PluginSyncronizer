@@ -150,6 +150,8 @@ namespace gui
         addAndMakeVisible(propagate_changes_toggle_);
         addAndMakeVisible(loader_.get());
 
+        addAndMakeVisible(inner_name_);
+
         pluginChanged();
 
         close_button_.onClick = [this] { clearPlugin(); };
@@ -231,7 +233,13 @@ namespace gui
     void PluginEditor::resized()
     {
         auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
+
         close_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
+
+        auto close_button_bounds = close_button_.getBounds();
+        inner_name_.setBounds(close_button_bounds.withY(close_button_bounds.getY() - 2 * kButtonHeight));
+        inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
+
         show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
         propagate_state_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
 
@@ -280,6 +288,16 @@ namespace gui
             setSize(kEditorWidth, kEditorHeight);
             return;
         }
+
+        auto pd_opt = processor_ref_.getPluginDescription();
+        if (pd_opt.has_value())
+        {
+            inner_name_.setText(pd_opt->name + " (" + pd_opt->manufacturerName + ")", juce::NotificationType::dontSendNotification);
+        }
+        else
+        {
+            inner_name_.setText("", juce::NotificationType::dontSendNotification);
+        }
     }
 
     void PluginEditor::clearPlugin()
@@ -296,6 +314,7 @@ namespace gui
     {
         auto is_loaded = processor_ref_.isPluginLoaded();
 
+        inner_name_.setVisible(is_loaded);
         close_button_.setVisible(is_loaded);
         show_button_.setVisible(is_loaded);
         accept_changes_toggle_.setVisible(is_loaded);
