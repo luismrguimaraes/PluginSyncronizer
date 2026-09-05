@@ -50,7 +50,7 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
+    void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where);
     std::optional<juce::PluginDescription> getPluginDescription();
 
     bool isPluginLoaded() const;
@@ -94,7 +94,7 @@ public:
 private:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
 
-    bool setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
+    void setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb, std::optional<std::function<void()>> onSuccessCallback = std::nullopt);
     bool prepareInstance(juce::AudioPluginInstance* instance, double sampleRate, int samplesPerBlock);
 
 private:
