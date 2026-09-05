@@ -42,12 +42,12 @@ void JuceDebugger::prepareToPlay(int samplesPerBlock, int inputChannels, int out
     }
 }
 
-void JuceDebugger::processInput(const juce::AudioBuffer<float>& buffer)
+void JuceDebugger::readInput(const juce::AudioBuffer<float>& buffer)
 {
     readJuceBuffer(buffer, juce_input_buffer_debugger_);
 }
 
-void JuceDebugger::processOutput(const juce::AudioBuffer<float>& buffer)
+void JuceDebugger::readOutput(const juce::AudioBuffer<float>& buffer)
 {
     readJuceBuffer(buffer, juce_output_buffer_debugger_);
 }

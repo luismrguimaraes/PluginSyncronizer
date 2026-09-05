@@ -48,6 +48,7 @@ PluginProcessor::PluginProcessor()
         opt.ignoreCaseOfKeyNames = false;
         opt.storageFormat = juce::PropertiesFile::StorageFormat::storeAsXML;
         opt.osxLibrarySubFolder = "Application Support";
+        opt.folderName = JucePlugin_Manufacturer;
         return opt;
     }());
 
@@ -73,6 +74,15 @@ PluginProcessor::PluginProcessor()
 
 PluginProcessor::~PluginProcessor()
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    {
+        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+        editor_needs_deletion_.store(true);
+        // make PluginEditor delete inner editor
+        juce::NullCheckedInvocation::invoke(plugin_changed_);
+        *inner = nullptr;
+    }
+
     shared_data_manager_.removeListener(this);
 }
 
@@ -154,7 +164,9 @@ void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
         setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
 
+#ifdef DEBUG
         juce_debugger_.prepareToPlay(samplesPerBlock, getTotalNumInputChannels(), getTotalNumOutputChannels());
+#endif
 
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime>
             inner(inner_);
@@ -236,7 +248,9 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     if (!inner_prepared_.load() || !are_we_playing_.load()) return;
 
-    juce_debugger_.processInput(buffer);
+#ifdef DEBUG
+    juce_debugger_.readInput(buffer);
+#endif
 
     // todo: add test to check if this ever allocates
     NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime>
@@ -246,7 +260,9 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         (*inner)->processBlock(buffer, midiMessages);
     }
 
-    juce_debugger_.processOutput(buffer);
+#ifdef DEBUG
+    juce_debugger_.readInput(buffer);
+#endif
 }
 
 void PluginProcessor::processBlock(juce::AudioBuffer<double>& buffer,
@@ -322,10 +338,6 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 
     const auto xlm_as_string = xml.toString();
     destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());
-
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
 }
 
 void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
@@ -416,18 +428,20 @@ void PluginProcessor::setPropagateChanges(bool propagate)
     notifyHost();
 }
 
-void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
+void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDescription)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     if (inner_plugin_description_.has_value() && pluginDescription.isDuplicateOf(inner_plugin_description_.value()))
     {
+#ifdef DEBUG
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
         jassert(*inner != nullptr);
+#endif
         return;
     }
 
-    setNewPlugin(pluginDescription, stateMemoryBlock);
+    setNewPlugin(pluginDescription, {});
 }
 
 void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
@@ -464,11 +478,12 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     });
 }
 
-void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
+bool PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
-    const auto callback = [this, mb, pd](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
+    bool success { false };
+    const auto callback = [this, mb, pd, &success](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
         {
             auto temp = instance->getPluginDescription().createXml();
             temp->writeTo(juce::File { "~/Desktop/PluginHostDev/plugin_description.xml" });
@@ -480,6 +495,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
                 "Plugin Instantiation Failed",
                 error);
             message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
+            success = false;
             return;
         }
 
@@ -487,17 +503,20 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         if (!mb.isEmpty())
             instance->setStateInformation(mb.getData(), static_cast<int>(mb.getSize()));
 
+        bool inner_was_prepared { false };
         if (are_we_playing_.load())
         {
-            auto success = prepareInstance(instance.get(), getSampleRate(), getBlockSize());
-            if (!success)
+            auto prepare_success = prepareInstance(instance.get(), getSampleRate(), getBlockSize());
+            if (!prepare_success)
             {
                 auto options = juce::MessageBoxOptions::makeOptionsOk(juce::MessageBoxIconType::WarningIcon,
                     "Could not prepare plugin. Cancelling load...",
                     "");
                 message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
+                success = false;
                 return;
             }
+            inner_was_prepared = true;
         }
 
         editor_style_ = EditorStyle::newWindow;
@@ -506,40 +525,29 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 
         {
             NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+            jassert((*inner) == nullptr || (*inner)->getActiveEditor() == nullptr); // the previous inner will be deleted and should have no active editor
             *inner = std::move(instance);
-            inner_prepared_.store(true);
+            inner_prepared_.store(inner_was_prepared);
             is_a_inner_loaded_.store(true);
         }
 
+        success = true;
         juce::NullCheckedInvocation::invoke(plugin_changed_);
     };
 
     plugin_format_manager_.createPluginInstanceAsync(pd, getSampleRate(), getBlockSize(), callback);
 
     notifyHost();
+    return success;
 }
 
 void PluginProcessor::createSharedPluginInstance(const juce::PluginDescription& pd, [[maybe_unused]] EditorStyle where, const juce::MemoryBlock& mb)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
-    const auto callback_for_shared_instance = [this, mb, pd](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
-        if (error.isNotEmpty())
-        {
-            auto options = juce::MessageBoxOptions::makeOptionsOk(juce::MessageBoxIconType::WarningIcon,
-                "Plugin Load Failed",
-                error);
-            message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
-            return;
-        }
-
-        if (instance != nullptr && !mb.isEmpty())
-            instance->setStateInformation(mb.getData(), static_cast<int>(mb.getSize()));
-
-        shared_data_manager_.updateInner(this, std::move(instance), pd);
-    };
-
-    plugin_format_manager_.createPluginInstanceAsync(pd, getSampleRate(), getBlockSize(), callback_for_shared_instance);
+    auto success = setNewPlugin(pd, {});
+    if (success)
+        shared_data_manager_.updateInnerPd(this, pd);
 }
 
 void PluginProcessor::callbackRemoveInner()
@@ -552,7 +560,8 @@ void PluginProcessor::callbackRemoveInner()
 
     inner_prepared_.store(false);
     editor_needs_deletion_.store(true);
-    juce::NullCheckedInvocation::invoke(plugin_changed_); // make PluginEditor delete inner editor
+    // make PluginEditor delete inner editor
+    juce::NullCheckedInvocation::invoke(plugin_changed_);
     *inner = nullptr;
 
     is_a_inner_loaded_.store(false);

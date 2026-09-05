@@ -8,17 +8,25 @@ namespace gui
     class PluginEditorComponent;
     class PluginLoaderComponent;
 
-    class PluginEditor : public juce::AudioProcessorEditor
+    class ScaledDocumentWindowDelegate
+    {
+    public:
+        virtual void callbackWindowClosed() = 0;
+    };
+
+    class PluginEditor : public ScaledDocumentWindowDelegate, public juce::AudioProcessorEditor
     {
     public:
         explicit PluginEditor(PluginProcessor&);
         ~PluginEditor() override;
 
-        //==============================================================================
         void paint(juce::Graphics&) override;
         void resized() override;
         void childBoundsChanged(Component* child) override;
         void setScaleFactor(float scale) override;
+
+        // ScaledDocumentWindowDelegate
+        void callbackWindowClosed() override;
 
     private: //NOLINT
         void pluginChanged();
@@ -35,7 +43,9 @@ namespace gui
         std::unique_ptr<PluginLoaderComponent> loader_;
         std::unique_ptr<melatonin::Inspector> inspector_;
         juce::ScopedValueSetter<std::function<void()>> scoped_callback_;
-        std::unique_ptr<Component> editor_;
+
+        std::unique_ptr<Component> inner_editor_window_;
+        PluginEditorComponent* inner_editor_component_ = nullptr;
 
         juce::TimedCallback ui_update_timer_;
 
@@ -48,7 +58,5 @@ namespace gui
 
         juce::ToggleButton accept_changes_toggle_ { "Accept Changes" };
         juce::ToggleButton propagate_changes_toggle_ { "Propagate Changes" };
-
-        PluginEditorComponent* inner_editor_component_ = nullptr;
     };
 }
