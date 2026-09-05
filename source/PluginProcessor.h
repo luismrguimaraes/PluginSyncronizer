@@ -51,6 +51,7 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
+    std::optional<juce::PluginDescription> getPluginDescription();
 
     bool isPluginLoaded() const;
     void removeInner();
