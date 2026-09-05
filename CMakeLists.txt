@@ -114,6 +114,7 @@ clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
 # Enable fast math, a specific C++ version and a few other target defaults
 include(SharedCodeDefaults)
 
+include(Sanitizers)
 
 # Manually list all .h and .cpp files for the plugin
 # If you are like me, you'll use globs for your sanity.
@@ -145,7 +146,6 @@ target_compile_definitions(SharedCode
     CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
     VERSION="${CURRENT_VERSION}"
 
-    # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
     PRODUCT_NAME_WITHOUT_VERSION="PluginHost"
 
     JUCE_PLUGINHOST_AU=1

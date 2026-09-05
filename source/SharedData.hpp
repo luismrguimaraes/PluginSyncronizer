@@ -9,7 +9,7 @@ struct SharedData
 {
     struct Listener
     {
-        virtual void callbackLoadInner(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& memoryBlock) = 0;
+        virtual void callbackLoadInner(const juce::PluginDescription& pluginDescription) = 0;
         virtual void callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) = 0;
         // ToDo: also add parameterBegin and end touch
         virtual void callbackUpdateParameterValue(int parameterIndex, float newValue) = 0;
@@ -35,7 +35,7 @@ public:
     void addListener(SharedData::Listener* newListener);
     void removeListener(SharedData::Listener* listenerToRemove);
 
-    void updateInner(const SharedData::Listener* sender, std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd);
+    void updateInnerPd(const SharedData::Listener* sender, juce::PluginDescription pd);
     void updateInnerState(const SharedData::Listener* sender, juce::MemoryBlock memoryBlock);
     void updateParameterValue(const SharedData::Listener* sender, int parameterIndex, float newValue);
 

@@ -50,7 +50,6 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    void setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
     void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where, const juce::MemoryBlock& mb = {});
 
     bool isPluginLoaded() const;
@@ -74,7 +73,7 @@ public:
     void audioProcessorChanged(AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details) override;
 
     // SharedData::Listener
-    void callbackLoadInner(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
+    void callbackLoadInner(const juce::PluginDescription& pluginDescription) override;
     void callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
     void callbackUpdateParameterValue(int parameterIndex, float newValue) override;
     void callbackRemoveInner() override;
@@ -94,6 +93,7 @@ public:
 private:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
 
+    bool setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb);
     bool prepareInstance(juce::AudioPluginInstance* instance, double sampleRate, int samplesPerBlock);
 
 private:
@@ -123,5 +123,7 @@ private:
     farbot::AsyncCaller<farbot::fifo_options::concurrency::multiple> async_caller_;
     juce::TimedCallback async_call_processing_timer_;
 
+#ifdef DEBUG
     JuceDebugger juce_debugger_;
+#endif
 };

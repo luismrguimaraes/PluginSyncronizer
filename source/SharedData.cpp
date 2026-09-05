@@ -24,6 +24,8 @@ void SharedDataManager::getStateInformation(juce::MemoryBlock& destData)
 
 void SharedDataManager::setStateInformation(const void* data, int sizeInBytes)
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+
     auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), static_cast<size_t>(sizeInBytes)));
     jassert(xml != nullptr);
 
@@ -56,7 +58,7 @@ void SharedDataManager::removeListener(SharedData::Listener* listenerToRemove)
     }
 }
 
-void SharedDataManager::updateInner([[maybe_unused]] const SharedData::Listener* sender, std::unique_ptr<juce::AudioPluginInstance> inner, juce::PluginDescription pd)
+void SharedDataManager::updateInnerPd([[maybe_unused]] const SharedData::Listener* sender, juce::PluginDescription pd)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
@@ -65,12 +67,11 @@ void SharedDataManager::updateInner([[maybe_unused]] const SharedData::Listener*
 
     shared_data_->plugin_description = pd;
 
-    juce::MemoryBlock new_inner_state;
-    inner->getStateInformation(new_inner_state);
-
     for (auto& listener : shared_data_->listeners)
     {
-        listener->callbackLoadInner(shared_data_->plugin_description.value(), new_inner_state);
+        if (sender == listener)
+            continue;
+        listener->callbackLoadInner(shared_data_->plugin_description.value());
     }
 }
 
@@ -81,7 +82,7 @@ void SharedDataManager::updateInnerState(const SharedData::Listener* sender, juc
     jassert(shared_data_->plugin_description.has_value());
     for (auto& listener : shared_data_->listeners)
     {
-        if (listener == sender)
+        if (sender == listener)
             continue;
         listener->callbackLoadInnerState(shared_data_->plugin_description.value(), stateMemoryBlock);
     }
@@ -93,7 +94,7 @@ void SharedDataManager::updateParameterValue(const SharedData::Listener* sender,
 
     for (auto& listener : shared_data_->listeners)
     {
-        if (listener == sender)
+        if (sender == listener)
             continue;
         listener->callbackUpdateParameterValue(parameterIndex, newValue);
     }
@@ -116,5 +117,7 @@ void SharedDataManager::removeInner()
 
 std::optional<juce::PluginDescription> SharedDataManager::getPluginDescription()
 {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+
     return shared_data_->plugin_description;
 }

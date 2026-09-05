@@ -5,8 +5,8 @@ class JuceDebugger
 {
 public:
     void prepareToPlay(int samplesPerBlock, int inputChannels, int outputChannels);
-    void processInput(const juce::AudioBuffer<float>& buffer);
-    void processOutput(const juce::AudioBuffer<float>& buffer);
+    void readInput(const juce::AudioBuffer<float>& buffer);
+    void readOutput(const juce::AudioBuffer<float>& buffer);
 
 private:
     std::vector<std::vector<float>> juce_input_buffer_debugger_;
