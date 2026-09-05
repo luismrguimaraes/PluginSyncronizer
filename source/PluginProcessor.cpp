@@ -527,7 +527,12 @@ bool PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 
     {
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-        jassert((*inner) == nullptr || (*inner)->getActiveEditor() == nullptr); // the previous inner will be deleted and should have no active editor
+        if ((*inner) != nullptr && (*inner)->getActiveEditor() != nullptr)
+        {
+            // this can happen on Undo
+            editor_needs_deletion_.store(true);
+            juce::NullCheckedInvocation::invoke(plugin_changed_);
+        }
         *inner = std::move(instance);
         inner_prepared_.store(inner_was_prepared);
         is_a_inner_loaded_.store(true);
