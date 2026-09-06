@@ -54,10 +54,12 @@ namespace gui
         juce::TextButton close_button_ { "Close Plugin" };
         juce::TextButton show_button_ { "Show Plugin UI" };
         juce::TextButton propagate_state_button_ { "Propagate State" };
+#ifdef DEBUG
         juce::TextButton inspect_button_ { "Inspect the UI" };
+#endif
 
-        juce::ToggleButton accept_changes_toggle_ { "Accept Changes" };
-        juce::ToggleButton propagate_changes_toggle_ { "Propagate Changes" };
+        juce::ToggleButton accept_changes_toggle_ { "Receive Changes" };
+        juce::ToggleButton propagate_changes_toggle_ { "Send Parameter Changes" };
 
         juce::Label inner_name_;
     };

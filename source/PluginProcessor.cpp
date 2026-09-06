@@ -81,7 +81,7 @@ PluginProcessor::~PluginProcessor()
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     {
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-        editor_needs_deletion_.store(true);
+        needs_editor_deletion_.store(true);
         // make PluginEditor delete inner editor
         juce::NullCheckedInvocation::invoke(plugin_changed_);
         *inner = nullptr;
@@ -376,6 +376,8 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
     int parameterIndex,
     float newValue)
 {
+    if (processor == this) return;
+
     // todo: add test to check if this allocates
     async_caller_.callAsync([this, processor, parameterIndex, newValue]() {
         jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
@@ -387,12 +389,29 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
         if (propagate_changes_.load())
         {
             shared_data_manager_.updateParameterValue(this, parameterIndex, newValue);
+            notifyHost();
         }
     });
 }
 
-void PluginProcessor::audioProcessorChanged([[maybe_unused]] AudioProcessor* processor, [[maybe_unused]] const juce::AudioProcessorListener::ChangeDetails& details)
+void PluginProcessor::audioProcessorChanged(AudioProcessor* processor, const juce::AudioProcessorListener::ChangeDetails& details)
 {
+    if (processor == this) return;
+
+    async_caller_.callAsync([this, processor, details]() {
+        {
+#ifdef DEBUG
+            NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+            [[maybe_unused]] auto inner_ap = dynamic_cast<juce::AudioProcessor*>((*inner).get());
+            jassert(inner_ap == processor);
+#endif
+        }
+
+        if (details.latencyChanged)
+        {
+            setLatencySamples(processor->getLatencySamples());
+        }
+    });
 }
 
 void PluginProcessor::propagateState()
@@ -447,7 +466,7 @@ void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDes
     setNewPlugin(pluginDescription, {});
 }
 
-void PluginProcessor::callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
+void PluginProcessor::callbackLoadInnerState([[maybe_unused]] const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     if (!accept_changes_) return;
@@ -476,9 +495,7 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     auto param = (*inner)->getHostedParameter(parameterIndex);
     param->setValue(newValue); // Don't notify to avoid infinite loop (listener -> shared -> here -> listener -> ...)
 
-    async_caller_.callAsync([this]() {
-        notifyHost();
-    });
+    notifyHost();
 }
 
 void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb, std::optional<std::function<void()>> onSuccessCallback)
@@ -489,7 +506,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 
 #ifdef DEBUG
         auto temp = instance->getPluginDescription().createXml();
-        temp->writeTo(juce::File { "~/Desktop/PluginHostDev/plugin_description.xml" });
+        temp->writeTo(juce::File { "~/Desktop/PluginHostDev/last_plugin_description.xml" });
 #endif
 
         if (error.isNotEmpty())
@@ -524,12 +541,14 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         inner_plugin_description_ = pd;
         instance->addListener(this);
 
+        setLatencySamples(instance->getLatencySamples());
+
         {
             NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
             if ((*inner) != nullptr && (*inner)->getActiveEditor() != nullptr)
             {
                 // this can happen on Undo
-                editor_needs_deletion_.store(true);
+                needs_editor_deletion_.store(true);
                 juce::NullCheckedInvocation::invoke(plugin_changed_);
             }
             *inner = std::move(instance);
@@ -573,7 +592,7 @@ void PluginProcessor::callbackRemoveInner()
         return;
 
     inner_prepared_.store(false);
-    editor_needs_deletion_.store(true);
+    needs_editor_deletion_.store(true);
     // make PluginEditor delete inner editor
     juce::NullCheckedInvocation::invoke(plugin_changed_);
     *inner = nullptr;
@@ -581,7 +600,7 @@ void PluginProcessor::callbackRemoveInner()
     is_a_inner_loaded_.store(false);
     inner_plugin_description_.reset();
     shared_data_manager_.removeInner();
-    editor_needs_deletion_.store(false);
+    needs_editor_deletion_.store(false);
 
     notifyHost();
 }
@@ -589,7 +608,7 @@ void PluginProcessor::callbackRemoveInner()
 void PluginProcessor::notifyHost()
 {
     auto change_details = AudioProcessorListener::ChangeDetails {};
-    updateHostDisplay(change_details.withParameterInfoChanged(true).withNonParameterStateChanged(true));
+    updateHostDisplay(change_details.withNonParameterStateChanged(true));
 }
 
 void PluginProcessor::numChannelsChanged()
@@ -625,11 +644,12 @@ void PluginProcessor::processorLayoutsChanged()
 void PluginProcessor::removeInner()
 {
     shared_data_manager_.removeInner();
+    setLatencySamples(0);
 }
 
-bool PluginProcessor::editorNeedsDeletion()
+bool PluginProcessor::needsEditorDeletion()
 {
-    return editor_needs_deletion_.load();
+    return needs_editor_deletion_.load();
 }
 
 bool PluginProcessor::isPluginLoaded() const

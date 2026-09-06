@@ -23,7 +23,11 @@ namespace gui
         PluginLoaderComponent(juce::AudioPluginFormatManager& manager,
             juce::KnownPluginList& list,
             Callback&& callback)
+#ifdef DEBUG
             : pluginListComponent_(manager, list, juce::File { "~/Desktop/PluginHostDev/deadMansFile.txt" }, {})
+#else
+            : pluginListComponent_(manager, list, {}, {})
+#endif
         {
             tlm_ = new MyTableListBoxModel { pluginListComponent_, list, this };
             pluginListComponent_.setTableModel(std::move(tlm_));
@@ -65,42 +69,41 @@ namespace gui
     class PluginEditorComponent final : public juce::Component
     {
     public:
-        template <typename Callback>
-        PluginEditorComponent(std::unique_ptr<juce::AudioProcessorEditor> editorIn, Callback&& onClose)
-            : editor(std::move(editorIn))
+        PluginEditorComponent(std::unique_ptr<juce::AudioProcessorEditor> editorIn)
+            : editor_(std::move(editorIn))
         {
-            addAndMakeVisible(editor.get());
-            childBoundsChanged(editor.get());
+            addAndMakeVisible(editor_.get());
+            childBoundsChanged(editor_.get());
         }
 
         void setScaleFactor(float scale)
         {
-            if (editor != nullptr)
-                editor->setScaleFactor(scale);
+            if (editor_ != nullptr)
+                editor_->setScaleFactor(scale);
         }
 
         void resized() override {}
 
         void childBoundsChanged(Component* child) override
         {
-            if (child != editor.get())
+            if (child != editor_.get())
                 return;
 
-            const auto size = editor != nullptr ? editor->getLocalBounds()
-                                                : juce::Rectangle<int>();
+            const auto size = editor_ != nullptr ? editor_->getLocalBounds()
+                                                 : juce::Rectangle<int>();
 
             setSize(size.getWidth(), size.getHeight());
         }
 
     private:
-        std::unique_ptr<juce::AudioProcessorEditor> editor;
+        std::unique_ptr<juce::AudioProcessorEditor> editor_;
     };
 
     class ScaledDocumentWindow final : public juce::DocumentWindow
     {
     public:
-        ScaledDocumentWindow(juce::Colour bg, float scale, ScaledDocumentWindowDelegate* delegate)
-            : DocumentWindow("Editor", bg, 4), delegate_ { std::move(delegate) }, desktopScale(scale) {}
+        ScaledDocumentWindow(juce::Colour bg, float scale, juce::String name, ScaledDocumentWindowDelegate* delegate)
+            : DocumentWindow(name, bg, 4), delegate_ { std::move(delegate) }, desktopScale(scale) {}
 
         float getDesktopScaleFactor() const override { return juce::Desktop::getInstance().getGlobalScaleFactor() * desktopScale; }
 
@@ -158,10 +161,7 @@ namespace gui
         show_button_.onClick = [this] {
             if (inner_editor_window_) return;
 
-            auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor(), [this] {
-                [[maybe_unused]] const auto posted = juce::MessageManager::callAsync([this] { clearPlugin(); });
-                jassert(posted);
-            });
+            auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor());
             inner_editor_component_ = editorComponent.get();
             inner_editor_component_->setScaleFactor(current_scale_factor_);
 
@@ -175,11 +175,15 @@ namespace gui
 
                     case EditorStyle::newWindow:
                         const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
-                        auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_, this);
+                        auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_, inner_name_.getText(), this);
                         window->setAlwaysOnTop(true);
                         window->setContentOwned(editorComponent.release(), true);
                         window->centreAroundComponent(this, window->getWidth(), window->getHeight());
+#ifdef JUCE_MAC
+                        // on macOS "setUsingNativeTitleBar" makes window dragging smoother but misses the initial window size so we compensate
                         window->setUsingNativeTitleBar(true);
+                        window->setSize(window->getWidth() - 1, window->getHeight() - 27);
+#endif
                         return window;
                 }
 
@@ -204,9 +208,8 @@ namespace gui
             propagate_changes_toggle_.setToggleState(!old_value, juce::NotificationType::sendNotification);
         };
 
+#ifdef DEBUG
         // addAndMakeVisible(inspect_button_);
-
-        // this chunk of code instantiates and opens the melatonin inspector
         inspect_button_.onClick = [&] {
             if (!inspector_)
             {
@@ -216,6 +219,7 @@ namespace gui
 
             inspector_->setVisible(true);
         };
+#endif
 
         ui_update_timer_.startTimer(kUIUpdateIntervalMs);
     }
@@ -281,7 +285,7 @@ namespace gui
     {
         updateComponentsVisibility();
 
-        if (processor_ref_.editorNeedsDeletion())
+        if (processor_ref_.needsEditorDeletion())
         {
             inner_editor_component_ = nullptr;
             inner_editor_window_ = nullptr;
@@ -290,14 +294,9 @@ namespace gui
         }
 
         auto pd_opt = processor_ref_.getPluginDescription();
-        if (pd_opt.has_value())
-        {
-            inner_name_.setText(pd_opt->name + " (" + pd_opt->manufacturerName + ")", juce::NotificationType::dontSendNotification);
-        }
-        else
-        {
-            inner_name_.setText("", juce::NotificationType::dontSendNotification);
-        }
+        jassert(pd_opt.has_value());
+        juce::String new_text = pd_opt.has_value() ? pd_opt->name + " (" + pd_opt->manufacturerName + ")" : "";
+        inner_name_.setText(new_text, juce::NotificationType::dontSendNotification);
     }
 
     void PluginEditor::clearPlugin()
@@ -323,5 +322,4 @@ namespace gui
 
         loader_->setVisible(!is_loaded);
     }
-
 }

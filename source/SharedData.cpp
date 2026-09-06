@@ -63,7 +63,7 @@ void SharedDataManager::removeListener(SharedData::Listener* listenerToRemove)
     }
 }
 
-void SharedDataManager::updateInnerPd([[maybe_unused]] const SharedData::Listener* sender, juce::PluginDescription pd)
+void SharedDataManager::updateInnerPd(const SharedData::Listener* sender, juce::PluginDescription pd)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 

@@ -55,7 +55,7 @@ public:
 
     bool isPluginLoaded() const;
     void removeInner();
-    bool editorNeedsDeletion();
+    bool needsEditorDeletion();
     void propagateState();
 
     bool getAcceptChanges();
@@ -108,7 +108,7 @@ private:
     juce::ScopedMessageBox message_box_;
 
     std::atomic<bool> is_a_inner_loaded_ { false };
-    std::atomic<bool> editor_needs_deletion_ { false };
+    std::atomic<bool> needs_editor_deletion_ { false };
     std::atomic<bool> inner_prepared_ { false };
     std::atomic<bool> are_we_playing_ { false };
 
