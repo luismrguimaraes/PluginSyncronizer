@@ -9,6 +9,7 @@
 #include <locale>
 #include <memory>
 #include <tuple>
+#include <utility>
 
 namespace
 {
@@ -191,7 +192,7 @@ void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
             }
         }
 
-        float_process_buffer_ = juce::AudioBuffer<float> { std::max(getTotalNumInputChannels(), getTotalNumOutputChannels()), samplesPerBlock };
+        double_process_buffer_ = juce::AudioBuffer<float> { std::max(getTotalNumInputChannels(), getTotalNumOutputChannels()), samplesPerBlock };
 
         are_we_playing_.store(true);
     });
@@ -256,12 +257,22 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce_debugger_.readInput(buffer);
 #endif
 
+    jassert(inner_process_buffer_.getNumChannels() <= buffer.getNumChannels()
+            && inner_process_buffer_.getNumSamples() == buffer.getNumSamples());
+    for (auto ch = 0; ch < inner_process_buffer_.getNumChannels(); ch++)
+    {
+        auto channel_data = inner_process_buffer_.getWritePointer(ch);
+        for (auto i = 0; i < inner_process_buffer_.getNumSamples(); i++)
+        {
+            channel_data[i] = buffer.getReadPointer(ch)[i];
+        }
+    }
+
     // todo: add test to check if this ever allocates
-    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime>
-        inner(inner_);
+    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime> inner(inner_);
     if (*inner != nullptr)
     {
-        (*inner)->processBlock(buffer, midiMessages);
+        (*inner)->processBlock(inner_process_buffer_, midiMessages);
     }
 
 #ifdef DEBUG
@@ -269,21 +280,20 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 #endif
 }
 
-void PluginProcessor::processBlock(juce::AudioBuffer<double>& buffer,
-    juce::MidiBuffer& midiMessages)
+void PluginProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midiMessages)
 {
     // ToDo: test (function untested)
     jassert(isUsingDoublePrecision());
-    jassert(buffer.getNumChannels() < float_process_buffer_.getNumChannels());
+    jassert(buffer.getNumChannels() < double_process_buffer_.getNumChannels());
 
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
     {
-        std::transform(buffer.getReadPointer(ch), buffer.getReadPointer(ch) + buffer.getNumSamples(), float_process_buffer_.getWritePointer(ch), [](auto sample) {
+        std::ranges::transform(buffer.getReadPointer(ch), buffer.getReadPointer(ch) + buffer.getNumSamples(), double_process_buffer_.getWritePointer(ch), [](double sample) {
             return static_cast<float>(sample);
         });
     }
 
-    this->processBlock(float_process_buffer_, midiMessages);
+    this->processBlock(double_process_buffer_, midiMessages);
 }
 
 //==============================================================================
@@ -455,13 +465,7 @@ void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDes
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     if (inner_plugin_description_.has_value() && pluginDescription.isDuplicateOf(inner_plugin_description_.value()))
-    {
-#ifdef DEBUG
-        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-        jassert(*inner != nullptr);
-#endif
         return;
-    }
 
     setNewPlugin(pluginDescription, {});
 }
@@ -502,9 +506,16 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
+    inner_plugin_description_ = pd;
+
     const auto callback = [this, mb, pd, onSuccessCallback = std::move(onSuccessCallback)](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error) {
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+
+        // In case inner_plugin_description_ was modified meanwhile for some reason
+        if (!inner_plugin_description_.has_value() || !pd.isDuplicateOf(inner_plugin_description_.value())) return;
 
 #ifdef DEBUG
+        jassert(instance->getPluginDescription().isDuplicateOf(pd));
         auto temp = instance->getPluginDescription().createXml();
         temp->writeTo(juce::File { "~/Desktop/PluginHostDev/last_plugin_description.xml" });
 #endif
@@ -515,6 +526,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
                 "Plugin Instantiation Failed",
                 error);
             message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
+            inner_plugin_description_.reset();
             return;
         }
 
@@ -532,13 +544,13 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
                     "Could not prepare plugin. Cancelling load...",
                     "");
                 message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
+                inner_plugin_description_.reset();
                 return;
             }
             inner_was_prepared = true;
         }
 
         editor_style_ = EditorStyle::newWindow;
-        inner_plugin_description_ = pd;
         instance->addListener(this);
 
         setLatencySamples(instance->getLatencySamples());
@@ -602,6 +614,8 @@ void PluginProcessor::callbackRemoveInner()
     shared_data_manager_.removeInner();
     needs_editor_deletion_.store(false);
 
+    setLatencySamples(0);
+
     notifyHost();
 }
 
@@ -644,7 +658,6 @@ void PluginProcessor::processorLayoutsChanged()
 void PluginProcessor::removeInner()
 {
     shared_data_manager_.removeInner();
-    setLatencySamples(0);
 }
 
 bool PluginProcessor::needsEditorDeletion()
@@ -745,6 +758,18 @@ bool PluginProcessor::prepareInstance(juce::AudioPluginInstance* instance, doubl
 
     instance->setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
     instance->prepareToPlay(sampleRate, samplesPerBlock);
+
+    inner_process_buffer_ = juce::AudioBuffer<float> {
+        std::max(instance->getTotalNumInputChannels(), instance->getTotalNumOutputChannels()), samplesPerBlock
+    };
+    for (auto ch = 0; ch < inner_process_buffer_.getNumChannels(); ch++)
+    {
+        auto channel_data = inner_process_buffer_.getWritePointer(ch);
+        for (auto i = 0; i < inner_process_buffer_.getNumSamples(); i++)
+        {
+            channel_data[i] = 0.0;
+        }
+    }
 
     return true;
 }

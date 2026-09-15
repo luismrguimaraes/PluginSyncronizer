@@ -112,7 +112,8 @@ private:
     std::atomic<bool> inner_prepared_ { false };
     std::atomic<bool> are_we_playing_ { false };
 
-    juce::AudioBuffer<float> float_process_buffer_;
+    juce::AudioBuffer<float> inner_process_buffer_;
+    juce::AudioBuffer<float> double_process_buffer_;
     juce::AudioProcessorValueTreeState apvts_;
 
     int group_ { 0 };

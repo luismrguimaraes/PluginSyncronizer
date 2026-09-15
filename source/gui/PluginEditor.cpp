@@ -153,6 +153,7 @@ namespace gui
         addAndMakeVisible(propagate_changes_toggle_);
         addAndMakeVisible(loader_.get());
 
+        inner_name_.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(inner_name_);
 
         pluginChanged();
@@ -294,7 +295,6 @@ namespace gui
         }
 
         auto pd_opt = processor_ref_.getPluginDescription();
-        jassert(pd_opt.has_value());
         juce::String new_text = pd_opt.has_value() ? pd_opt->name + " (" + pd_opt->manufacturerName + ")" : "";
         inner_name_.setText(new_text, juce::NotificationType::dontSendNotification);
     }
