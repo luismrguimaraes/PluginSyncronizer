@@ -146,7 +146,7 @@ namespace gui
 
         setSize(kEditorWidth, kEditorHeight);
         setResizable(false, false);
-        addAndMakeVisible(close_button_);
+        addAndMakeVisible(remove_button_);
         addAndMakeVisible(show_button_);
         addAndMakeVisible(propagate_state_button_);
         addAndMakeVisible(accept_changes_toggle_);
@@ -158,7 +158,7 @@ namespace gui
 
         pluginChanged();
 
-        close_button_.onClick = [this] { clearPlugin(); };
+        remove_button_.onClick = [this] { clearPlugin(); };
         show_button_.onClick = [this] {
             if (inner_editor_window_) return;
 
@@ -239,16 +239,16 @@ namespace gui
     {
         auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
 
-        close_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
+        remove_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
 
-        auto close_button_bounds = close_button_.getBounds();
-        inner_name_.setBounds(close_button_bounds.withY(close_button_bounds.getY() - 2 * kButtonHeight));
+        auto remove_button_bounds = remove_button_.getBounds();
+        inner_name_.setBounds(remove_button_bounds.withY(remove_button_bounds.getY() - 2 * kButtonHeight));
         inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
 
         show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
         propagate_state_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
 
-        accept_changes_toggle_.setBounds(close_button_.getBounds().withX(0));
+        accept_changes_toggle_.setBounds(remove_button_.getBounds().withX(0));
         propagate_changes_toggle_.setBounds(show_button_.getBounds().withX(0));
 
         loader_->setBounds(getLocalBounds());
@@ -314,7 +314,7 @@ namespace gui
         auto is_loaded = processor_ref_.isPluginLoaded();
 
         inner_name_.setVisible(is_loaded);
-        close_button_.setVisible(is_loaded);
+        remove_button_.setVisible(is_loaded);
         show_button_.setVisible(is_loaded);
         accept_changes_toggle_.setVisible(is_loaded);
         propagate_changes_toggle_.setVisible(is_loaded);

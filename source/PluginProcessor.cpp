@@ -491,7 +491,12 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
 
-    jassert(*inner != nullptr);
+    if (*inner == nullptr)
+    {
+        // inner creation is async but its description assignment is not
+        jassert(inner_plugin_description_.has_value());
+        return;
+    }
 
     if (!accept_changes_) return;
 
