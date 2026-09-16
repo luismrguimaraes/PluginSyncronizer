@@ -311,7 +311,7 @@ namespace gui
 
     void PluginEditor::updateComponentsVisibility()
     {
-        auto is_loaded = processor_ref_.isPluginLoaded();
+        auto is_loaded = processor_ref_.isAnInnerLoaded();
 
         inner_name_.setVisible(is_loaded);
         remove_button_.setVisible(is_loaded);

@@ -7,7 +7,7 @@ void SharedDataManager::getStateInformation(juce::MemoryBlock& destData)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
-    juce::XmlElement xml { juce::String { utils::kSharedStateTag } };
+    juce::XmlElement xml { utils::kSharedStateTag };
 
     if (shared_data_->plugin_description.has_value())
     {

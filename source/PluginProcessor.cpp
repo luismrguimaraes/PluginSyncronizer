@@ -8,15 +8,16 @@
 #include <cstddef>
 #include <locale>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <utility>
 
 namespace
 {
-    constexpr const char* kInnerStateTag = "inner_state";
-    constexpr const char* kGroupTag = "group";
-    constexpr const char* kEditorStyleTag = "editor_style";
-    constexpr const char* kSharedDataManStateTag = "shared_data";
+    inline const juce::String kInnerStateTag = "inner_state";
+    inline const juce::String kGroupTag = "group";
+    inline const juce::String kEditorStyleTag = "editor_style";
+    inline const juce::String kSharedDataManStateTag = "shared_data";
 
     constexpr int kAsyncCallProcessingMs { 5 };
     constexpr int kSupportedNumChannels { 2 };
@@ -312,7 +313,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
-    juce::XmlElement xml { juce::String { utils::kMainStateTag } };
+    juce::XmlElement xml { utils::kMainStateTag };
 
     auto groupNode = std::make_unique<juce::XmlElement>(kGroupTag);
     groupNode->addTextElement(juce::String { group_ });
@@ -338,6 +339,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
         juce::MemoryBlock shared_state;
         shared_data_manager_.getStateInformation(shared_state);
 
+        jassert(kSharedDataManStateTag != utils::kSharedStateTag);
         auto stateNode = std::make_unique<juce::XmlElement>(kSharedDataManStateTag);
         stateNode->addTextElement(shared_state.toBase64Encoding());
         return stateNode.release();
@@ -570,7 +572,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
             }
             *inner = std::move(instance);
             inner_prepared_.store(inner_was_prepared);
-            is_a_inner_loaded_.store(true);
+            is_an_inner_loaded_.store(true);
         }
 
         juce::NullCheckedInvocation::invoke(plugin_changed_);
@@ -614,7 +616,7 @@ void PluginProcessor::callbackRemoveInner()
     juce::NullCheckedInvocation::invoke(plugin_changed_);
     *inner = nullptr;
 
-    is_a_inner_loaded_.store(false);
+    is_an_inner_loaded_.store(false);
     inner_plugin_description_.reset();
     shared_data_manager_.removeInner();
     needs_editor_deletion_.store(false);
@@ -670,9 +672,9 @@ bool PluginProcessor::needsEditorDeletion()
     return needs_editor_deletion_.load();
 }
 
-bool PluginProcessor::isPluginLoaded() const
+bool PluginProcessor::isAnInnerLoaded() const
 {
-    return is_a_inner_loaded_.load();
+    return is_an_inner_loaded_.load();
 }
 
 std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor() const

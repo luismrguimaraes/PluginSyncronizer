@@ -50,10 +50,10 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where);
+    void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where = EditorStyle::newWindow);
     std::optional<juce::PluginDescription> getPluginDescription();
 
-    bool isPluginLoaded() const;
+    bool isAnInnerLoaded() const;
     void removeInner();
     bool needsEditorDeletion();
     void propagateState();
@@ -107,7 +107,7 @@ private:
     EditorStyle editor_style_ = EditorStyle {};
     juce::ScopedMessageBox message_box_;
 
-    std::atomic<bool> is_a_inner_loaded_ { false };
+    std::atomic<bool> is_an_inner_loaded_ { false };
     std::atomic<bool> needs_editor_deletion_ { false };
     std::atomic<bool> inner_prepared_ { false };
     std::atomic<bool> are_we_playing_ { false };

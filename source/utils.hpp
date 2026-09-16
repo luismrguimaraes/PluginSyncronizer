@@ -3,8 +3,8 @@
 
 namespace utils
 {
-    inline const std::string kMainStateTag { "state" };
-    inline const std::string kSharedStateTag { "shared_state" };
+    inline const juce::String kMainStateTag { "state" };
+    inline const juce::String kSharedStateTag { "shared_state" };
 
     bool
         try_other_layouts(juce::AudioProcessor::Bus* bus, juce::AudioChannelSet& requested);
