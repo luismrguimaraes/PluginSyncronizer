@@ -88,6 +88,7 @@ public:
     // For Tests
     void setInnerParameter(int parameterIndex, float newValue);
     float getInnerParameter(int parameterIndex) const;
+    juce::AudioProcessor* getInner(); // not const, but changing this will not change the NonRTMutatable
 
 public:
     juce::ApplicationProperties app_properties_;

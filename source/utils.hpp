@@ -8,4 +8,7 @@ namespace utils
 
     bool
         try_other_layouts(juce::AudioProcessor::Bus* bus, juce::AudioChannelSet& requested);
+
+#define require(expression) \
+    if (!(expression)) std::terminate;
 }
