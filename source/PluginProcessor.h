@@ -51,16 +51,16 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where = EditorStyle::newWindow);
-    std::optional<juce::PluginDescription> getPluginDescription();
+    std::optional<juce::PluginDescription> getPluginDescription() const;
 
     bool isAnInnerLoaded() const;
     void removeInner();
-    bool needsEditorDeletion();
+    bool needsEditorDeletion() const;
     void propagateState();
 
-    bool getAcceptChanges();
+    bool getAcceptChanges() const;
     void setAcceptChanges(bool accept);
-    bool getPropagateChanges();
+    bool getPropagateChanges() const;
     void setPropagateChanges(bool propagate);
 
     std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const;
@@ -84,6 +84,10 @@ public:
     void numChannelsChanged() override;
     void numBusesChanged() override;
     void processorLayoutsChanged() override;
+
+    // For Tests
+    void setInnerParameter(int parameterIndex, float newValue);
+    float getInnerParameter(int parameterIndex) const;
 
 public:
     juce::ApplicationProperties app_properties_;

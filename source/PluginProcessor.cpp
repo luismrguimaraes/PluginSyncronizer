@@ -6,6 +6,8 @@
 #include "utils.hpp"
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
+#include <exception>
 #include <locale>
 #include <memory>
 #include <string>
@@ -414,7 +416,7 @@ void PluginProcessor::audioProcessorChanged(AudioProcessor* processor, const juc
         {
 #ifdef DEBUG
             NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-            [[maybe_unused]] auto inner_ap = dynamic_cast<juce::AudioProcessor*>((*inner).get());
+            [[maybe_unused]] auto inner_ap = static_cast<juce::AudioProcessor*>((*inner).get());
             jassert(inner_ap == processor);
 #endif
         }
@@ -436,7 +438,7 @@ void PluginProcessor::propagateState()
     shared_data_manager_.updateInnerState(this, mb);
 }
 
-bool PluginProcessor::getAcceptChanges()
+bool PluginProcessor::getAcceptChanges() const
 {
     return accept_changes_;
 }
@@ -449,7 +451,7 @@ void PluginProcessor::setAcceptChanges(bool accept)
     notifyHost();
 }
 
-bool PluginProcessor::getPropagateChanges()
+bool PluginProcessor::getPropagateChanges() const
 {
     return propagate_changes_.load();
 }
@@ -507,6 +509,51 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     param->setValue(newValue); // Don't notify to avoid infinite loop (listener -> shared -> here -> listener -> ...)
 
     notifyHost();
+}
+
+void PluginProcessor::setInnerParameter(int parameterIndex, float newValue)
+{
+#ifndef TESTS_TARGET
+    std::terminate();
+#endif
+
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+
+    if (*inner == nullptr)
+    {
+        // inner creation is async but its description assignment is not
+        jassert(inner_plugin_description_.has_value());
+        return;
+    }
+
+    jassert(parameterIndex < (*inner)->getParameters().size());
+    auto param = (*inner)->getHostedParameter(parameterIndex);
+    param->setValue(newValue);
+
+    auto shared_ptr = *inner;
+    auto audio_processor_cast = static_cast<juce::AudioProcessor*>(shared_ptr.get());
+    jassert(audio_processor_cast != nullptr);
+    audioProcessorParameterChanged(audio_processor_cast, parameterIndex, newValue);
+}
+
+float PluginProcessor::getInnerParameter(int parameterIndex) const
+{
+#ifndef TESTS_TARGET
+    std::terminate(); // only call on Tests
+#endif
+
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+
+    if (*inner == nullptr)
+    {
+        std::terminate();
+    }
+
+    jassert(parameterIndex < (*inner)->getParameters().size());
+    auto param = (*inner)->getHostedParameter(parameterIndex);
+    return param->getValue();
 }
 
 void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce::MemoryBlock& mb, std::optional<std::function<void()>> onSuccessCallback)
@@ -595,7 +642,7 @@ void PluginProcessor::createSharedPluginInstance(const juce::PluginDescription& 
     });
 }
 
-std::optional<juce::PluginDescription> PluginProcessor::getPluginDescription()
+std::optional<juce::PluginDescription> PluginProcessor::getPluginDescription() const
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
@@ -667,7 +714,7 @@ void PluginProcessor::removeInner()
     shared_data_manager_.removeInner();
 }
 
-bool PluginProcessor::needsEditorDeletion()
+bool PluginProcessor::needsEditorDeletion() const
 {
     return needs_editor_deletion_.load();
 }

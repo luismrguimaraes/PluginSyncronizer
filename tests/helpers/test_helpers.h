@@ -19,13 +19,23 @@
    });
 
  */
-[[maybe_unused]] static void runWithinPluginEditor(const std::function<void(PluginProcessor& plugin)>& testCode)
+[[maybe_unused]] static void runWithinPluginEditor(const std::function<void(PluginProcessor& processor)>& testCode)
 {
-    PluginProcessor plugin;
-    const auto editor = plugin.createEditorIfNeeded();
+    PluginProcessor processor;
+    const auto editor = processor.createEditorIfNeeded();
 
-    testCode(plugin);
+    testCode(processor);
 
-    plugin.editorBeingDeleted(editor);
+    processor.editorBeingDeleted(editor);
+    delete editor;
+}
+
+[[maybe_unused]] static void runWithinPluginEditor(PluginProcessor& processor, const std::function<void(PluginProcessor& processor)>& testCode)
+{
+    const auto editor = processor.createEditorIfNeeded();
+
+    testCode(processor);
+
+    processor.editorBeingDeleted(editor);
     delete editor;
 }
