@@ -160,39 +160,7 @@ namespace gui
 
         remove_button_.onClick = [this] { clearPlugin(); };
         show_button_.onClick = [this] {
-            if (inner_editor_window_) return;
-
-            auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor());
-            inner_editor_component_ = editorComponent.get();
-            inner_editor_component_->setScaleFactor(current_scale_factor_);
-
-            inner_editor_window_ = [&]() -> std::unique_ptr<Component> {
-                switch (processor_ref_.getEditorStyle())
-                {
-                    case EditorStyle::thisWindow:
-                        addChildComponent(editorComponent.get());
-                        setSize(editorComponent->getWidth(), editorComponent->getHeight());
-                        return std::move(editorComponent);
-
-                    case EditorStyle::newWindow:
-                        const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
-                        auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_, inner_name_.getText(), this);
-                        window->setAlwaysOnTop(true);
-                        window->setContentOwned(editorComponent.release(), true);
-                        window->centreAroundComponent(this, window->getWidth(), window->getHeight());
-#ifdef JUCE_MAC
-                        // on macOS "setUsingNativeTitleBar" makes window dragging smoother but misses the initial window size so we compensate
-                        window->setUsingNativeTitleBar(true);
-                        window->setSize(window->getWidth() - 1, window->getHeight() - 27);
-#endif
-                        return window;
-                }
-
-                jassertfalse;
-                return nullptr;
-            }();
-
-            inner_editor_window_->setVisible(true);
+            showInnerEditor(true);
         };
         propagate_state_button_.onClick = [this] { processor_ref_.propagateState(); };
 
@@ -297,6 +265,11 @@ namespace gui
         auto pd_opt = processor_ref_.getPluginDescription();
         juce::String new_text = pd_opt.has_value() ? pd_opt->name + " (" + pd_opt->manufacturerName + ")" : "";
         inner_name_.setText(new_text, juce::NotificationType::dontSendNotification);
+
+        if (processor_ref_.wantsInnerEditor())
+        {
+            showInnerEditor(false);
+        }
     }
 
     void PluginEditor::clearPlugin()
@@ -321,5 +294,51 @@ namespace gui
         propagate_state_button_.setVisible(is_loaded);
 
         loader_->setVisible(!is_loaded);
+    }
+
+    void PluginEditor::showInnerEditor(bool wants_keyboard_focus)
+    {
+        if (inner_editor_window_)
+        {
+            inner_editor_window_->grabKeyboardFocus();
+            return;
+        }
+
+        auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor());
+        inner_editor_component_ = editorComponent.get();
+        inner_editor_component_->setScaleFactor(current_scale_factor_);
+
+        inner_editor_window_ = [&]() -> std::unique_ptr<Component> {
+            switch (processor_ref_.getEditorStyle())
+            {
+                case EditorStyle::thisWindow:
+                    addChildComponent(editorComponent.get());
+                    setSize(editorComponent->getWidth(), editorComponent->getHeight());
+                    return std::move(editorComponent);
+
+                case EditorStyle::newWindow:
+                    const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
+                    auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_, inner_name_.getText(), this);
+                    window->setAlwaysOnTop(true);
+                    window->setContentOwned(editorComponent.release(), true);
+                    window->centreAroundComponent(this, window->getWidth(), window->getHeight());
+#ifdef JUCE_MAC
+                    // on macOS "setUsingNativeTitleBar" makes window dragging smoother but misses the initial window size so we compensate
+                    window->setUsingNativeTitleBar(true);
+                    window->setSize(window->getWidth() - 1, window->getHeight() - 27);
+#endif
+                    return window;
+            }
+
+            jassertfalse;
+            return nullptr;
+        }();
+
+        inner_editor_window_->setVisible(true);
+        if (!wants_keyboard_focus)
+        {
+            inner_editor_window_->giveAwayKeyboardFocus();
+            this->grabKeyboardFocus();
+        }
     }
 }

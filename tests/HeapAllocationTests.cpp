@@ -78,7 +78,7 @@ void operator delete[](void* ptr) noexcept
 
 TEST_CASE("Allocation test", "[HeapAllocation]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
 

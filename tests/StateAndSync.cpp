@@ -12,7 +12,7 @@
 
 TEST_CASE("Loads state correctly", "[State]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
     auto* messageManager = juce::MessageManager::getInstance();
@@ -56,7 +56,7 @@ TEST_CASE("Loads state correctly", "[State]")
 
 TEST_CASE("Loads state correctly when there is more than one instance", "[State]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
     auto* messageManager = juce::MessageManager::getInstance();
@@ -136,7 +136,7 @@ TEST_CASE("Loads state correctly when there is more than one instance", "[State]
 
 TEST_CASE("Creating a new instance loads an inner if there is a shared plugin description", "[Sync]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
 
@@ -166,7 +166,7 @@ TEST_CASE("Creating a new instance loads an inner if there is a shared plugin de
 
 TEST_CASE("Changing one instance inner params also change the other instances inner params (if the respective options are enabled)", "[Sync]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
 

@@ -85,10 +85,11 @@ PluginProcessor::~PluginProcessor()
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     {
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-        needs_editor_deletion_.store(true);
+        needs_editor_deletion_ = true;
         // make PluginEditor delete inner editor
         juce::NullCheckedInvocation::invoke(plugin_changed_);
         *inner = nullptr;
+        needs_editor_deletion_ = false;
     }
 
     shared_data_manager_.removeListener(this);
@@ -391,12 +392,7 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
 {
     if (processor == this) return;
 
-#ifdef DEBUG
-    {
-        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime> realtime_inner(inner_);
-        jassert(processor == (*realtime_inner).get());
-    }
-#endif
+    // assume processor is inner, we cannot acquire a realtime mutatable here because process block runs concurrently
 
     async_caller_.callAsync([this, parameterIndex, newValue]() {
         jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
@@ -417,12 +413,7 @@ void PluginProcessor::audioProcessorChanged(AudioProcessor* processor, const juc
 {
     if (processor == this) return;
 
-#ifdef DEBUG
-    {
-        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime> realtime_inner(inner_);
-        jassert(processor == (*realtime_inner).get());
-    }
-#endif
+    // assume processor is inner, we cannot acquire a realtime mutatable here because process block runs concurrently
 
     async_caller_.callAsync([this, details]() {
         jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
@@ -607,7 +598,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         if (!mb.isEmpty())
             instance->setStateInformation(mb.getData(), static_cast<int>(mb.getSize()));
 
-        bool inner_was_prepared { false };
+        bool inner_prepared { false };
         if (are_we_playing_.load())
         {
             auto prepare_success = prepareInstance(instance.get(), getSampleRate(), getBlockSize());
@@ -620,7 +611,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
                 inner_plugin_description_.reset();
                 return;
             }
-            inner_was_prepared = true;
+            inner_prepared = true;
         }
 
         editor_style_ = EditorStyle::newWindow;
@@ -628,19 +619,22 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 
         setLatencySamples(instance->getLatencySamples());
 
+        bool editor_was_open { false };
         {
             NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
             if ((*inner) != nullptr && (*inner)->getActiveEditor() != nullptr)
             {
+                editor_was_open = true;
                 // this can happen on Undo
-                needs_editor_deletion_.store(true);
+                needs_editor_deletion_ = true;
                 juce::NullCheckedInvocation::invoke(plugin_changed_);
+                needs_editor_deletion_ = false;
             }
             *inner = std::move(instance);
-            inner_prepared_.store(inner_was_prepared);
-            is_an_inner_loaded_.store(true);
+            inner_prepared_.store(inner_prepared);
+            is_an_inner_loaded_ = true;
         }
-
+        wants_inner_editor_ = editor_was_open;
         juce::NullCheckedInvocation::invoke(plugin_changed_);
 
         if (onSuccessCallback.has_value())
@@ -677,15 +671,15 @@ void PluginProcessor::callbackRemoveInner()
         return;
 
     inner_prepared_.store(false);
-    needs_editor_deletion_.store(true);
+    needs_editor_deletion_ = true;
     // make PluginEditor delete inner editor
     juce::NullCheckedInvocation::invoke(plugin_changed_);
     *inner = nullptr;
 
-    is_an_inner_loaded_.store(false);
+    is_an_inner_loaded_ = false;
     inner_plugin_description_.reset();
     shared_data_manager_.removeInner();
-    needs_editor_deletion_.store(false);
+    needs_editor_deletion_ = false;
 
     setLatencySamples(0);
 
@@ -735,12 +729,17 @@ void PluginProcessor::removeInner()
 
 bool PluginProcessor::needsEditorDeletion() const
 {
-    return needs_editor_deletion_.load();
+    return needs_editor_deletion_;
 }
 
 bool PluginProcessor::isAnInnerLoaded() const
 {
-    return is_an_inner_loaded_.load();
+    return is_an_inner_loaded_;
+}
+
+bool PluginProcessor::wantsInnerEditor() const
+{
+    return wants_inner_editor_;
 }
 
 std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor() const

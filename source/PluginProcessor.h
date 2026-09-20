@@ -53,9 +53,10 @@ public:
     void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where = EditorStyle::newWindow);
     std::optional<juce::PluginDescription> getPluginDescription() const;
 
-    bool isAnInnerLoaded() const;
     void removeInner();
     bool needsEditorDeletion() const;
+    bool isAnInnerLoaded() const;
+    bool wantsInnerEditor() const;
     void propagateState();
 
     bool getAcceptChanges() const;
@@ -112,8 +113,10 @@ private:
     EditorStyle editor_style_ = EditorStyle {};
     juce::ScopedMessageBox message_box_;
 
-    std::atomic<bool> is_an_inner_loaded_ { false };
-    std::atomic<bool> needs_editor_deletion_ { false };
+    bool is_an_inner_loaded_ { false };
+    bool needs_editor_deletion_ { false };
+    bool wants_inner_editor_ { false };
+
     std::atomic<bool> inner_prepared_ { false };
     std::atomic<bool> are_we_playing_ { false };
 
