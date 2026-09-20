@@ -29,7 +29,7 @@ public:
         shared_data_->listeners.reserve(10);
     }
 
-    void getStateInformation(juce::MemoryBlock& destData);
+    void getStateInformation(juce::MemoryBlock& destData, juce::File logs_dir);
     void setStateInformation(const void* data, int sizeInBytes);
 
     void addListener(SharedData::Listener* newListener);

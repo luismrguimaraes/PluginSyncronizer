@@ -3,7 +3,7 @@
 #include <chrono>
 #include <thread>
 
-void SharedDataManager::getStateInformation(juce::MemoryBlock& destData)
+void SharedDataManager::getStateInformation(juce::MemoryBlock& destData, juce::File logs_directory)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
@@ -14,9 +14,7 @@ void SharedDataManager::getStateInformation(juce::MemoryBlock& destData)
         xml.addChildElement(shared_data_->plugin_description.value().createXml().release());
     }
 
-#ifdef DEBUG
-    xml.writeTo(juce::File { "~/Desktop/PluginHostDev/SharedPluginStateDebug.xml" });
-#endif
+    xml.writeTo(logs_directory.getChildFile("SharedPluginStateLog.xml"));
 
     const auto xlm_as_string = xml.toString();
     destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());

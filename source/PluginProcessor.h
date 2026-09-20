@@ -95,6 +95,7 @@ public:
 
 public:
     juce::ApplicationProperties app_properties_;
+    juce::File logs_directory_;
     juce::AudioPluginFormatManager plugin_format_manager_;
     juce::KnownPluginList plugin_list_;
     std::function<void()> plugin_changed_;

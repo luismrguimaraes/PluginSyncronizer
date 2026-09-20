@@ -65,6 +65,10 @@ PluginProcessor::PluginProcessor()
     if (auto savedPluginList = app_properties_.getUserSettings()->getXmlValue("pluginList_"))
         plugin_list_.recreateFromXml(*savedPluginList);
 
+    juce::String logs_folder { "Logs" };
+    logs_directory_ = app_properties_.getUserSettings()->getFile().getParentDirectory().getChildFile(logs_folder);
+    logs_directory_.createDirectory();
+
     juce::MessageManagerLock lock; // why is this here?
     plugin_list_.addChangeListener(this);
 
@@ -307,7 +311,7 @@ bool PluginProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* PluginProcessor::createEditor()
 {
-    return new gui::PluginEditor(*this);
+    return new gui::PluginEditor(*this, logs_directory_);
 }
 
 //==============================================================================
@@ -339,7 +343,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 
     xml.addChildElement([this] {
         juce::MemoryBlock shared_state;
-        shared_data_manager_.getStateInformation(shared_state);
+        shared_data_manager_.getStateInformation(shared_state, logs_directory_);
 
         jassert(kSharedDataManStateTag != utils::kSharedStateTag);
         auto stateNode = std::make_unique<juce::XmlElement>(kSharedDataManStateTag);
@@ -350,9 +354,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
     xml.setAttribute("accept_changes", accept_changes_);
     xml.setAttribute("propagate_changes", propagate_changes_.load());
 
-#ifdef DEBUG
-    xml.writeTo(juce::File { "~/Desktop/PluginHostDev/PluginStateDebug.xml" });
-#endif
+    xml.writeTo(logs_directory_.getChildFile("PluginStateLog.xml"));
 
     const auto xlm_as_string = xml.toString();
     destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());
@@ -404,8 +406,9 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
         if (propagate_changes_.load())
         {
             shared_data_manager_.updateParameterValue(this, parameterIndex, newValue);
-            notifyHost();
         }
+
+        notifyHost();
     });
 }
 
@@ -420,10 +423,12 @@ void PluginProcessor::audioProcessorChanged(AudioProcessor* processor, const juc
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
         if (*inner == nullptr) return;
 
-        if (details.latencyChanged)
+        if (details.latencyChanged && getLatencySamples() != (*inner)->getLatencySamples())
         {
             setLatencySamples((*inner)->getLatencySamples());
         }
+
+        notifyHost();
     });
 }
 
@@ -580,9 +585,9 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 
 #ifdef DEBUG
         jassert(instance->getPluginDescription().isDuplicateOf(pd));
-        auto temp = instance->getPluginDescription().createXml();
-        temp->writeTo(juce::File { "~/Desktop/PluginHostDev/last_plugin_description.xml" });
 #endif
+        auto pd_to_log = instance->getPluginDescription().createXml();
+        pd_to_log->writeTo(logs_directory_.getChildFile("LastPluginDescription.xml"));
 
         if (error.isNotEmpty())
         {
@@ -636,6 +641,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         }
         wants_inner_editor_ = editor_was_open;
         juce::NullCheckedInvocation::invoke(plugin_changed_);
+        wants_inner_editor_ = false;
 
         if (onSuccessCallback.has_value())
             (*onSuccessCallback)();
@@ -688,6 +694,7 @@ void PluginProcessor::callbackRemoveInner()
 
 void PluginProcessor::notifyHost()
 {
+    // todo: add a dummy parameter to change here. updateHostDisplay does not work on a AU build in REAPER
     auto change_details = AudioProcessorListener::ChangeDetails {};
     updateHostDisplay(change_details.withNonParameterStateChanged(true));
 }

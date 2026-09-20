@@ -17,7 +17,7 @@ namespace gui
     class PluginEditor : public ScaledDocumentWindowDelegate, public juce::AudioProcessorEditor
     {
     public:
-        explicit PluginEditor(PluginProcessor&);
+        PluginEditor(PluginProcessor& processor_ref, juce::File logs_directory);
         ~PluginEditor() override;
 
         void paint(juce::Graphics&) override;

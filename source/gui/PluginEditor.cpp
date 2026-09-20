@@ -23,12 +23,9 @@ namespace gui
         template <typename Callback>
         PluginLoaderComponent(juce::AudioPluginFormatManager& manager,
             juce::KnownPluginList& list,
+            juce::File logs_directory,
             Callback&& callback)
-#ifdef DEBUG
-            : pluginListComponent_(manager, list, juce::File { "~/Desktop/PluginHostDev/deadMansFile.txt" }, {})
-#else
-            : pluginListComponent_(manager, list, {}, {})
-#endif
+            : pluginListComponent_(manager, list, logs_directory.getChildFile("deadMansPedal.txt"), {})
         {
             tlm_ = new MyTableListBoxModel { pluginListComponent_, list, this };
             pluginListComponent_.setTableModel(std::move(tlm_));
@@ -138,10 +135,10 @@ namespace gui
         float desktopScale = 1.0f;
     };
 
-    PluginEditor::PluginEditor(PluginProcessor& p)
-        : AudioProcessorEditor(&p), processor_ref_(p), scoped_callback_(p.plugin_changed_, [this] { pluginChanged(); }), ui_update_timer_ { [this]() { updateUI(); } }
+    PluginEditor::PluginEditor(PluginProcessor& p, juce::File logs_directory)
+        : AudioProcessorEditor { &p }, processor_ref_ { p }, scoped_callback_ { p.plugin_changed_, [this] { pluginChanged(); } }, ui_update_timer_ { [this]() { updateUI(); } }
     {
-        loader_ = std::make_unique<PluginLoaderComponent>(p.plugin_format_manager_, p.plugin_list_, [&p](const juce::PluginDescription& pd, EditorStyle editorStyle) {
+        loader_ = std::make_unique<PluginLoaderComponent>(p.plugin_format_manager_, p.plugin_list_, logs_directory, [&p](const juce::PluginDescription& pd, EditorStyle editorStyle) {
             p.createSharedPluginInstance(pd, editorStyle);
         });
 
@@ -264,7 +261,7 @@ namespace gui
         }
 
         auto pd_opt = processor_ref_.getPluginDescription();
-        juce::String new_text = pd_opt.has_value() ? pd_opt->name + " (" + pd_opt->manufacturerName + ")" : "";
+        juce::String new_text = pd_opt.has_value() ? pd_opt->name + " " + pd_opt->pluginFormatName + " (" + pd_opt->manufacturerName + ")" : "";
         inner_name_.setText(new_text, juce::NotificationType::dontSendNotification);
 
         if (processor_ref_.wantsInnerEditor())
@@ -340,7 +337,10 @@ namespace gui
         if (!wants_keyboard_focus)
         {
             inner_editor_window_->giveAwayKeyboardFocus();
-            this->grabKeyboardFocus();
+            if (this->isShowing())
+            {
+                this->grabKeyboardFocus();
+            }
         }
     }
 }
