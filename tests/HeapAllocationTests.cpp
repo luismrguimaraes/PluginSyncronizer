@@ -11,32 +11,33 @@
 
 // chatGPT allocation tracker implementation
 
+#include <cstddef>
+#include <cstdlib>
+#include <new>
+
 namespace
 {
-    std::size_t allocationCount { 0 };
-    bool trackAllocations = false;
+    thread_local std::size_t allocationCount = 0;
 
     struct AllocationScopedTracker
     {
         AllocationScopedTracker()
+            : startCount(allocationCount)
         {
-            allocationCount = 0;
-            trackAllocations = true;
         }
 
-        ~AllocationScopedTracker()
+        [[nodiscard]] std::size_t count() const noexcept
         {
-            trackAllocations = false;
+            return allocationCount - startCount;
         }
 
-        std::size_t count() const
+        void reset() noexcept
         {
-            return allocationCount;
+            startCount = allocationCount;
         }
-        void reset() const
-        {
-            allocationCount = 0;
-        }
+
+    private:
+        std::size_t startCount;
     };
 }
 
@@ -44,9 +45,7 @@ void* operator new(std::size_t size)
 {
     if (void* ptr = std::malloc(size))
     {
-        if (trackAllocations)
-            ++allocationCount;
-
+        ++allocationCount;
         return ptr;
     }
 
@@ -62,9 +61,7 @@ void* operator new[](std::size_t size)
 {
     if (void* ptr = std::malloc(size))
     {
-        if (trackAllocations)
-            ++allocationCount;
-
+        ++allocationCount;
         return ptr;
     }
 
@@ -72,6 +69,17 @@ void* operator new[](std::size_t size)
 }
 
 void operator delete[](void* ptr) noexcept
+{
+    std::free(ptr);
+}
+
+// Sized delete overloads
+void operator delete(void* ptr, std::size_t) noexcept
+{
+    std::free(ptr);
+}
+
+void operator delete[](void* ptr, std::size_t) noexcept
 {
     std::free(ptr);
 }
@@ -120,6 +128,7 @@ TEST_CASE("Allocation test", "[HeapAllocation]")
     AllocationScopedTracker process_allocations;
     processor1.processBlock(audio_buffer, midi_buffer);
     CHECK(process_allocations.count() == 0);
+    CHECK(!is_silence(audio_buffer));
 
     runWithinPluginEditor(processor1, [](PluginProcessor& processor) {
         auto inner = processor.getInner();

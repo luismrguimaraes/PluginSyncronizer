@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "../utils.hpp"
 #include "MyTableListBoxModel.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
 #include <memory>
@@ -312,6 +313,7 @@ namespace gui
             switch (processor_ref_.getEditorStyle())
             {
                 case EditorStyle::thisWindow:
+                    require(false); // not implemented
                     addChildComponent(editorComponent.get());
                     setSize(editorComponent->getWidth(), editorComponent->getHeight());
                     return std::move(editorComponent);

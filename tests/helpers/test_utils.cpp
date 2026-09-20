@@ -51,6 +51,5 @@ void apply_state(PluginProcessor& processor, const juce::MemoryBlock& state)
 
 std::unique_ptr<juce::XmlElement> parse_state(const juce::MemoryBlock& state)
 {
-    auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(state.getData())), static_cast<size_t>(state.getSize())));
-    return xml;
+    return juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(state.getData())), static_cast<size_t>(state.getSize())));
 }

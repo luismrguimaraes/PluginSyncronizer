@@ -834,14 +834,7 @@ bool PluginProcessor::prepareInstance(juce::AudioPluginInstance* instance, doubl
     inner_process_buffer_ = juce::AudioBuffer<float> {
         std::max(instance->getTotalNumInputChannels(), instance->getTotalNumOutputChannels()), samplesPerBlock
     };
-    for (auto ch = 0; ch < inner_process_buffer_.getNumChannels(); ch++)
-    {
-        auto channel_data = inner_process_buffer_.getWritePointer(ch);
-        for (auto i = 0; i < inner_process_buffer_.getNumSamples(); i++)
-        {
-            channel_data[i] = 0.0;
-        }
-    }
+    fill_with_silence(inner_process_buffer_);
 
     return true;
 }

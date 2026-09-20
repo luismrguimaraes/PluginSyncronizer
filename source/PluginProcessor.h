@@ -1,7 +1,7 @@
 #pragma once
 
 #include "SharedData.hpp"
-#include "debug/DebugUtils.hpp"
+#include "debug/JuceUtils.hpp"
 #include "farbot/include/farbot/AsyncCaller.hpp"
 #include "farbot/include/farbot/RealtimeObject.hpp"
 #include "farbot/include/farbot/fifo.hpp"
@@ -12,8 +12,10 @@
     #include "ipps.h"
 #endif
 
-enum class EditorStyle { thisWindow,
-    newWindow };
+enum class EditorStyle {
+    thisWindow,
+    newWindow
+};
 
 class PluginProcessor : public juce::AudioProcessor, public SharedData::Listener, private juce::ChangeListener, private juce::AudioProcessorListener
 {
