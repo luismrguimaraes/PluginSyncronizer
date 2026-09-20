@@ -51,7 +51,7 @@ namespace gui
 
         juce::TimedCallback ui_update_timer_;
 
-        float current_scale_factor_ { 1.0f };
+        float host_scale_factor_ { 1.0f };
 
         juce::TextButton remove_button_ { "Remove" };
         juce::TextButton show_button_ { "Show UI" };
@@ -64,5 +64,7 @@ namespace gui
         juce::ToggleButton propagate_changes_toggle_ { "Send Parameter Changes" };
 
         juce::Label inner_name_;
+
+        juce::Component main_component_; // this allows rescaling the whole plugin with a juce::AffineTransform
     };
 }

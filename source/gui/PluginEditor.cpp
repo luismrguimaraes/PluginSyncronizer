@@ -2,6 +2,7 @@
 #include "../utils.hpp"
 #include "MyTableListBoxModel.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
+#include <algorithm>
 #include <memory>
 
 namespace
@@ -80,7 +81,10 @@ namespace gui
                 editor_->setScaleFactor(scale);
         }
 
-        void resized() override {}
+        void resized() override
+        {
+            editor_->setSize(getWidth(), getHeight());
+        }
 
         void childBoundsChanged(Component* child) override
         {
@@ -143,16 +147,19 @@ namespace gui
         });
 
         setSize(kEditorWidth, kEditorHeight);
-        setResizable(false, false);
-        addAndMakeVisible(remove_button_);
-        addAndMakeVisible(show_button_);
-        addAndMakeVisible(propagate_state_button_);
-        addAndMakeVisible(accept_changes_toggle_);
-        addAndMakeVisible(propagate_changes_toggle_);
-        addAndMakeVisible(loader_.get());
+        setResizable(true, true);
+
+        addAndMakeVisible(main_component_);
+
+        main_component_.addChildComponent(remove_button_);
+        main_component_.addChildComponent(show_button_);
+        main_component_.addChildComponent(propagate_state_button_);
+        main_component_.addChildComponent(accept_changes_toggle_);
+        main_component_.addChildComponent(propagate_changes_toggle_);
+        main_component_.addChildComponent(loader_.get());
 
         inner_name_.setJustificationType(juce::Justification::centred);
-        addAndMakeVisible(inner_name_);
+        main_component_.addChildComponent(inner_name_);
 
         pluginChanged();
 
@@ -188,6 +195,28 @@ namespace gui
         };
 #endif
 
+        // setBounds
+        {
+            main_component_.setBounds({ 0, 0, kEditorWidth, kEditorHeight });
+
+            auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
+
+            remove_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
+
+            auto remove_button_bounds = remove_button_.getBounds();
+            inner_name_.setBounds(remove_button_bounds.withY(remove_button_bounds.getY() - 2 * kButtonHeight));
+            inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
+
+            show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
+            propagate_state_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
+
+            accept_changes_toggle_.setBounds(remove_button_.getBounds().withX(0));
+            propagate_changes_toggle_.setBounds(show_button_.getBounds().withX(0));
+
+            loader_->setBounds(getLocalBounds());
+        }
+
+        updateUI();
         ui_update_timer_.startTimer(kUIUpdateIntervalMs);
     }
 
@@ -203,34 +232,30 @@ namespace gui
 
     void PluginEditor::resized()
     {
-        auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
+        auto bounds = getBounds();
+        float new_width = bounds.getWidth();
+        float new_height = bounds.getHeight();
+        float scale = std::min(new_width / static_cast<float>(kEditorWidth), new_height / static_cast<float>(kEditorHeight));
+        scale = std::clamp(scale, 0.5f, 4.0f);
+        // const std::vector<float> scale_values { 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0 };
+        // auto bounded_scale = std::lower_bound(scale_values.begin(), scale_values.end(), scale);
+        // scale = bounded_scale != scale_values.end() ? *bounded_scale : 1.0;
+        main_component_.setTransform(juce::AffineTransform::scale(scale));
 
-        remove_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
+        // processor_ref_.setUserScale()
 
-        auto remove_button_bounds = remove_button_.getBounds();
-        inner_name_.setBounds(remove_button_bounds.withY(remove_button_bounds.getY() - 2 * kButtonHeight));
-        inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
-
-        show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
-        propagate_state_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
-
-        accept_changes_toggle_.setBounds(remove_button_.getBounds().withX(0));
-        propagate_changes_toggle_.setBounds(show_button_.getBounds().withX(0));
-
-        loader_->setBounds(getLocalBounds());
+        setSize(kEditorWidth * scale, kEditorHeight * scale);
     }
 
     void PluginEditor::childBoundsChanged([[maybe_unused]] Component* child)
     {
-        const auto bounds = inner_editor_window_ != nullptr ? inner_editor_window_->getLocalBounds()
-                                                            : juce::Rectangle<int>();
-
-        setSize(bounds.getWidth(), bounds.getHeight());
+        [[maybe_unused]] const auto child_bounds = inner_editor_window_ != nullptr ? inner_editor_window_->getLocalBounds()
+                                                                                   : juce::Rectangle<int>();
     }
 
     void PluginEditor::setScaleFactor(float scale)
     {
-        current_scale_factor_ = scale;
+        host_scale_factor_ = scale;
         AudioProcessorEditor::setScaleFactor(scale);
 
         [[maybe_unused]] const auto posted = juce::MessageManager::callAsync([ref = SafePointer<PluginEditor>(this), scale] {
@@ -256,7 +281,6 @@ namespace gui
         {
             inner_editor_component_ = nullptr;
             inner_editor_window_ = nullptr;
-            setSize(kEditorWidth, kEditorHeight);
             return;
         }
 
@@ -302,9 +326,11 @@ namespace gui
             return;
         }
 
-        auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor());
+        auto inner_editor = processor_ref_.createInnerEditor();
+        auto make_inner_editor_resizable = inner_editor->resizableCorner == nullptr && inner_editor->isResizable();
+        auto editorComponent = std::make_unique<PluginEditorComponent>(std::move(inner_editor));
         inner_editor_component_ = editorComponent.get();
-        inner_editor_component_->setScaleFactor(current_scale_factor_);
+        inner_editor_component_->setScaleFactor(host_scale_factor_);
 
         inner_editor_window_ = [&]() -> std::unique_ptr<Component> {
             switch (processor_ref_.getEditorStyle())
@@ -317,10 +343,11 @@ namespace gui
 
                 case EditorStyle::newWindow:
                     const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
-                    auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_, inner_name_.getText(), this);
+                    auto window = std::make_unique<ScaledDocumentWindow>(bg, host_scale_factor_, inner_name_.getText(), this);
                     window->setAlwaysOnTop(true);
                     window->setContentOwned(editorComponent.release(), true);
                     window->centreAroundComponent(this, window->getWidth(), window->getHeight());
+                    window->setResizable(make_inner_editor_resizable, false);
 #ifdef JUCE_MAC
                     // on macOS "setUsingNativeTitleBar" makes window dragging smoother but misses the initial window size so we compensate
                     window->setUsingNativeTitleBar(true);
