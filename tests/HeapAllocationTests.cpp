@@ -105,8 +105,8 @@ TEST_CASE("Allocation test", "[HeapAllocation]")
         CHECK(processor.getPluginDescription().has_value());
     });
     CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
-    check_inner_loaded_and_pd_has_value(processor1);
-    check_inner_loaded_and_pd_has_value(processor2);
+    CHECK(is_inner_loaded_and_pd_has_value(processor1));
+    CHECK(is_inner_loaded_and_pd_has_value(processor2));
 
     processor1.prepareToPlay(44100, 512);
     processor2.prepareToPlay(44100, 512);

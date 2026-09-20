@@ -2,12 +2,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-TEST_CASE("one is equal to one", "[dummy]")
+TEST_CASE("one is equal to one", "")
 {
     REQUIRE(1 == 1);
 }
 
-TEST_CASE("Plugin instance", "[instance]")
+TEST_CASE("Plugin instance", "")
 {
     PluginProcessor testPlugin;
 
@@ -21,7 +21,7 @@ TEST_CASE("Plugin instance", "[instance]")
 #ifdef PAMPLEJUCE_IPP
     #include <ipp.h>
 
-TEST_CASE("IPP version", "[ipp]")
+TEST_CASE("IPP version", "")
 {
     #if defined(__APPLE__)
     // macOS uses 2021.9.1 from pip wheel (only x86_64 version available)

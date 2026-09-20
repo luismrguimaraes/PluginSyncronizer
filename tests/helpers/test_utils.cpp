@@ -38,10 +38,9 @@ juce::PluginDescription get_pd_from_xml(juce::String xmlRelativePath)
     return pd;
 }
 
-void check_inner_loaded_and_pd_has_value(const PluginProcessor& processor)
+bool is_inner_loaded_and_pd_has_value(const PluginProcessor& processor)
 {
-    CHECK(processor.getPluginDescription().has_value());
-    CHECK(processor.isAnInnerLoaded());
+    return processor.getPluginDescription().has_value() && processor.isAnInnerLoaded();
 }
 
 void apply_state(PluginProcessor& processor, const juce::MemoryBlock& state)
