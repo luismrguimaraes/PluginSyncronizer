@@ -23,7 +23,11 @@ namespace gui
         PluginLoaderComponent(juce::AudioPluginFormatManager& manager,
             juce::KnownPluginList& list,
             Callback&& callback)
+#ifdef DEBUG
             : pluginListComponent_(manager, list, juce::File { "~/Desktop/PluginHostDev/deadMansFile.txt" }, {})
+#else
+            : pluginListComponent_(manager, list, {}, {})
+#endif
         {
             tlm_ = new MyTableListBoxModel { pluginListComponent_, list, this };
             pluginListComponent_.setTableModel(std::move(tlm_));
@@ -65,42 +69,41 @@ namespace gui
     class PluginEditorComponent final : public juce::Component
     {
     public:
-        template <typename Callback>
-        PluginEditorComponent(std::unique_ptr<juce::AudioProcessorEditor> editorIn, Callback&& onClose)
-            : editor(std::move(editorIn))
+        PluginEditorComponent(std::unique_ptr<juce::AudioProcessorEditor> editorIn)
+            : editor_(std::move(editorIn))
         {
-            addAndMakeVisible(editor.get());
-            childBoundsChanged(editor.get());
+            addAndMakeVisible(editor_.get());
+            childBoundsChanged(editor_.get());
         }
 
         void setScaleFactor(float scale)
         {
-            if (editor != nullptr)
-                editor->setScaleFactor(scale);
+            if (editor_ != nullptr)
+                editor_->setScaleFactor(scale);
         }
 
         void resized() override {}
 
         void childBoundsChanged(Component* child) override
         {
-            if (child != editor.get())
+            if (child != editor_.get())
                 return;
 
-            const auto size = editor != nullptr ? editor->getLocalBounds()
-                                                : juce::Rectangle<int>();
+            const auto size = editor_ != nullptr ? editor_->getLocalBounds()
+                                                 : juce::Rectangle<int>();
 
             setSize(size.getWidth(), size.getHeight());
         }
 
     private:
-        std::unique_ptr<juce::AudioProcessorEditor> editor;
+        std::unique_ptr<juce::AudioProcessorEditor> editor_;
     };
 
     class ScaledDocumentWindow final : public juce::DocumentWindow
     {
     public:
-        ScaledDocumentWindow(juce::Colour bg, float scale, ScaledDocumentWindowDelegate* delegate)
-            : DocumentWindow("Editor", bg, 4), delegate_ { std::move(delegate) }, desktopScale(scale) {}
+        ScaledDocumentWindow(juce::Colour bg, float scale, juce::String name, ScaledDocumentWindowDelegate* delegate)
+            : DocumentWindow(name, bg, 4), delegate_ { std::move(delegate) }, desktopScale(scale) {}
 
         float getDesktopScaleFactor() const override { return juce::Desktop::getInstance().getGlobalScaleFactor() * desktopScale; }
 
@@ -143,25 +146,23 @@ namespace gui
 
         setSize(kEditorWidth, kEditorHeight);
         setResizable(false, false);
-        addAndMakeVisible(close_button_);
+        addAndMakeVisible(remove_button_);
         addAndMakeVisible(show_button_);
         addAndMakeVisible(propagate_state_button_);
         addAndMakeVisible(accept_changes_toggle_);
         addAndMakeVisible(propagate_changes_toggle_);
         addAndMakeVisible(loader_.get());
 
+        inner_name_.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(inner_name_);
 
         pluginChanged();
 
-        close_button_.onClick = [this] { clearPlugin(); };
+        remove_button_.onClick = [this] { clearPlugin(); };
         show_button_.onClick = [this] {
             if (inner_editor_window_) return;
 
-            auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor(), [this] {
-                [[maybe_unused]] const auto posted = juce::MessageManager::callAsync([this] { clearPlugin(); });
-                jassert(posted);
-            });
+            auto editorComponent = std::make_unique<PluginEditorComponent>(processor_ref_.createInnerEditor());
             inner_editor_component_ = editorComponent.get();
             inner_editor_component_->setScaleFactor(current_scale_factor_);
 
@@ -175,11 +176,15 @@ namespace gui
 
                     case EditorStyle::newWindow:
                         const auto bg = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker();
-                        auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_, this);
+                        auto window = std::make_unique<ScaledDocumentWindow>(bg, current_scale_factor_, inner_name_.getText(), this);
                         window->setAlwaysOnTop(true);
                         window->setContentOwned(editorComponent.release(), true);
                         window->centreAroundComponent(this, window->getWidth(), window->getHeight());
+#ifdef JUCE_MAC
+                        // on macOS "setUsingNativeTitleBar" makes window dragging smoother but misses the initial window size so we compensate
                         window->setUsingNativeTitleBar(true);
+                        window->setSize(window->getWidth() - 1, window->getHeight() - 27);
+#endif
                         return window;
                 }
 
@@ -204,9 +209,8 @@ namespace gui
             propagate_changes_toggle_.setToggleState(!old_value, juce::NotificationType::sendNotification);
         };
 
+#ifdef DEBUG
         // addAndMakeVisible(inspect_button_);
-
-        // this chunk of code instantiates and opens the melatonin inspector
         inspect_button_.onClick = [&] {
             if (!inspector_)
             {
@@ -216,6 +220,7 @@ namespace gui
 
             inspector_->setVisible(true);
         };
+#endif
 
         ui_update_timer_.startTimer(kUIUpdateIntervalMs);
     }
@@ -234,16 +239,16 @@ namespace gui
     {
         auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
 
-        close_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
+        remove_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
 
-        auto close_button_bounds = close_button_.getBounds();
-        inner_name_.setBounds(close_button_bounds.withY(close_button_bounds.getY() - 2 * kButtonHeight));
+        auto remove_button_bounds = remove_button_.getBounds();
+        inner_name_.setBounds(remove_button_bounds.withY(remove_button_bounds.getY() - 2 * kButtonHeight));
         inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
 
         show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
         propagate_state_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
 
-        accept_changes_toggle_.setBounds(close_button_.getBounds().withX(0));
+        accept_changes_toggle_.setBounds(remove_button_.getBounds().withX(0));
         propagate_changes_toggle_.setBounds(show_button_.getBounds().withX(0));
 
         loader_->setBounds(getLocalBounds());
@@ -281,7 +286,7 @@ namespace gui
     {
         updateComponentsVisibility();
 
-        if (processor_ref_.editorNeedsDeletion())
+        if (processor_ref_.needsEditorDeletion())
         {
             inner_editor_component_ = nullptr;
             inner_editor_window_ = nullptr;
@@ -290,14 +295,8 @@ namespace gui
         }
 
         auto pd_opt = processor_ref_.getPluginDescription();
-        if (pd_opt.has_value())
-        {
-            inner_name_.setText(pd_opt->name + " (" + pd_opt->manufacturerName + ")", juce::NotificationType::dontSendNotification);
-        }
-        else
-        {
-            inner_name_.setText("", juce::NotificationType::dontSendNotification);
-        }
+        juce::String new_text = pd_opt.has_value() ? pd_opt->name + " (" + pd_opt->manufacturerName + ")" : "";
+        inner_name_.setText(new_text, juce::NotificationType::dontSendNotification);
     }
 
     void PluginEditor::clearPlugin()
@@ -312,10 +311,10 @@ namespace gui
 
     void PluginEditor::updateComponentsVisibility()
     {
-        auto is_loaded = processor_ref_.isPluginLoaded();
+        auto is_loaded = processor_ref_.isAnInnerLoaded();
 
         inner_name_.setVisible(is_loaded);
-        close_button_.setVisible(is_loaded);
+        remove_button_.setVisible(is_loaded);
         show_button_.setVisible(is_loaded);
         accept_changes_toggle_.setVisible(is_loaded);
         propagate_changes_toggle_.setVisible(is_loaded);
@@ -323,5 +322,4 @@ namespace gui
 
         loader_->setVisible(!is_loaded);
     }
-
 }

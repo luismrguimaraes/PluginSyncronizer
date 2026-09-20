@@ -7,7 +7,7 @@ void SharedDataManager::getStateInformation(juce::MemoryBlock& destData)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
-    juce::XmlElement xml { juce::String { utils::kSharedStateTag } };
+    juce::XmlElement xml { utils::kSharedStateTag };
 
     if (shared_data_->plugin_description.has_value())
     {
@@ -63,7 +63,7 @@ void SharedDataManager::removeListener(SharedData::Listener* listenerToRemove)
     }
 }
 
-void SharedDataManager::updateInnerPd([[maybe_unused]] const SharedData::Listener* sender, juce::PluginDescription pd)
+void SharedDataManager::updateInnerPd(const SharedData::Listener* sender, juce::PluginDescription pd)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 

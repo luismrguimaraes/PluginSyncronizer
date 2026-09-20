@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<PLUGIN name="ChowCentaur" format="VST3" category="Fx" manufacturer="chowdsp"
+        version="1.4.0" file="ChowCentaur.vst3"
+        uniqueId="bb820324" isInstrument="0" fileTime="179a5f80730" infoUpdateTime="19e60a7b902"
+        numInputs="2" numOutputs="2" isShell="0" hasARAExtension="0"
+        uid="12453cf3"/>

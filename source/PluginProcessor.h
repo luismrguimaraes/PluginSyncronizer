@@ -50,17 +50,17 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where);
-    std::optional<juce::PluginDescription> getPluginDescription();
+    void createSharedPluginInstance(const juce::PluginDescription& pd, EditorStyle where = EditorStyle::newWindow);
+    std::optional<juce::PluginDescription> getPluginDescription() const;
 
-    bool isPluginLoaded() const;
+    bool isAnInnerLoaded() const;
     void removeInner();
-    bool editorNeedsDeletion();
+    bool needsEditorDeletion() const;
     void propagateState();
 
-    bool getAcceptChanges();
+    bool getAcceptChanges() const;
     void setAcceptChanges(bool accept);
-    bool getPropagateChanges();
+    bool getPropagateChanges() const;
     void setPropagateChanges(bool propagate);
 
     std::unique_ptr<juce::AudioProcessorEditor> createInnerEditor() const;
@@ -85,6 +85,11 @@ public:
     void numBusesChanged() override;
     void processorLayoutsChanged() override;
 
+    // For Tests
+    void setInnerParameter(int parameterIndex, float newValue);
+    float getInnerParameter(int parameterIndex) const;
+    juce::AudioProcessor* getInner(); // not const, but changing this will not change the NonRTMutatable
+
 public:
     juce::ApplicationProperties app_properties_;
     juce::AudioPluginFormatManager plugin_format_manager_;
@@ -107,12 +112,13 @@ private:
     EditorStyle editor_style_ = EditorStyle {};
     juce::ScopedMessageBox message_box_;
 
-    std::atomic<bool> is_a_inner_loaded_ { false };
-    std::atomic<bool> editor_needs_deletion_ { false };
+    std::atomic<bool> is_an_inner_loaded_ { false };
+    std::atomic<bool> needs_editor_deletion_ { false };
     std::atomic<bool> inner_prepared_ { false };
     std::atomic<bool> are_we_playing_ { false };
 
-    juce::AudioBuffer<float> float_process_buffer_;
+    juce::AudioBuffer<float> inner_process_buffer_;
+    juce::AudioBuffer<float> double_process_buffer_;
     juce::AudioProcessorValueTreeState apvts_;
 
     int group_ { 0 };

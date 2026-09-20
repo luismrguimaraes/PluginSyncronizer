@@ -51,13 +51,15 @@ namespace gui
 
         float current_scale_factor_ { 1.0f };
 
-        juce::TextButton close_button_ { "Close Plugin" };
-        juce::TextButton show_button_ { "Show Plugin UI" };
+        juce::TextButton remove_button_ { "Remove" };
+        juce::TextButton show_button_ { "Show UI" };
         juce::TextButton propagate_state_button_ { "Propagate State" };
+#ifdef DEBUG
         juce::TextButton inspect_button_ { "Inspect the UI" };
+#endif
 
-        juce::ToggleButton accept_changes_toggle_ { "Accept Changes" };
-        juce::ToggleButton propagate_changes_toggle_ { "Propagate Changes" };
+        juce::ToggleButton accept_changes_toggle_ { "Receive All Changes" };
+        juce::ToggleButton propagate_changes_toggle_ { "Send Parameter Changes" };
 
         juce::Label inner_name_;
     };

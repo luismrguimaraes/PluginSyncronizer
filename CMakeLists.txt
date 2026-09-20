@@ -183,6 +183,7 @@ include(PamplejuceIPP)
 
 # Everything related to the tests target
 include(Tests)
+target_compile_definitions(Tests PRIVATE TESTS_TARGET)
 
 # A separate target for Benchmarks (keeps the Tests target fast)
 include(Benchmarks)

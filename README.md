@@ -4,6 +4,7 @@
 - a_regular_variable
 - functionParameter
 - kSomeConstant
+- free_function()
 
 ### For template updates
 

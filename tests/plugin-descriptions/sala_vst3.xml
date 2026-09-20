@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<PLUGIN name="Sala" format="VST3" category="Fx|Reverb" manufacturer="Fors"
+        version="1.0" file="Sala.vst3" uniqueId="1c3a3daa"
+        isInstrument="0" fileTime="195d90ee190" infoUpdateTime="1a0b1247a7e"
+        numInputs="2" numOutputs="2" isShell="0" hasARAExtension="0"
+        uid="c2c228cc"/>
