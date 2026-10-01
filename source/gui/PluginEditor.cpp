@@ -26,14 +26,14 @@ namespace gui
             juce::KnownPluginList& list,
             juce::File logs_directory,
             Callback&& callback)
-            : pluginListComponent_(manager, list, logs_directory.getChildFile("deadMansPedal.txt"), {})
+            : plugin_list_component_(manager, list, logs_directory.getChildFile("deadMansPedal.txt"), {})
         {
-            tlm_ = new MyTableListBoxModel { pluginListComponent_, list, this };
-            pluginListComponent_.setTableModel(std::move(tlm_));
+            tlm_ = new MyTableListBoxModel { plugin_list_component_, list, this };
+            plugin_list_component_.setTableModel(std::move(tlm_));
             tlm_ = nullptr;
 
-            pluginListComponent_.getTableListBox().setMultipleSelectionEnabled(false);
-            addAndMakeVisible(pluginListComponent_);
+            plugin_list_component_.getTableListBox().setMultipleSelectionEnabled(false);
+            addAndMakeVisible(plugin_list_component_);
 
             callback_ = [&list, cb = std::forward<Callback>(callback)](int rowNumber, EditorStyle style) {
                 const auto& types = list.getTypes();
@@ -49,7 +49,7 @@ namespace gui
             grid.setGap(juce::Grid::Px { kMargin });
             grid.templateColumns = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
             grid.templateRows = { juce::Grid::TrackInfo { juce::Grid::Fr { 1 } } };
-            grid.items = { juce::GridItem { pluginListComponent_ } };
+            grid.items = { juce::GridItem { plugin_list_component_ } };
             grid.performLayout(getLocalBounds());
         }
 
@@ -59,7 +59,7 @@ namespace gui
         }
 
     private:
-        juce::PluginListComponent pluginListComponent_;
+        juce::PluginListComponent plugin_list_component_;
         MyTableListBoxModel* tlm_;
 
         std::function<void(int, EditorStyle)> callback_;
@@ -297,6 +297,8 @@ namespace gui
     void PluginEditor::clearPlugin()
     {
         processor_ref_.removeInner();
+        updateUI();
+        loader_->grabKeyboardFocus();
     }
 
     void PluginEditor::updateUI()
