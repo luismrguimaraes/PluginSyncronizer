@@ -1,4 +1,6 @@
 #include "MyTableListBoxModel.hpp"
+#include <cstddef>
+#include <memory>
 
 namespace gui
 {
@@ -26,7 +28,10 @@ namespace gui
         descCol = 5
     };
 
-    void MyTableListBoxModel::paintCell(juce::Graphics& g, int row, int columnId, int width, int height, bool /*rowIsSelected*/)
+    void MyTableListBoxModel::paintCell(juce::Graphics&, int, int, int, int, bool) {}
+
+    juce::Component*
+        MyTableListBoxModel::refreshComponentForCell(int row, int columnId, bool isRowSelected, juce::Component* existingComponentToUpdate)
     {
         juce::String text;
         bool isBlacklisted = row >= list.getNumTypes();
@@ -66,15 +71,23 @@ namespace gui
             }
         }
 
-        if (text.isNotEmpty())
+        float height { 14 };
+
+        auto label = std::make_unique<juce::Label>();
+        label->setInterceptsMouseClicks(false, false);
+        const auto defaultTextColour = owner.findColour(juce::ListBox::textColourId);
+        label->setColour(
+            juce::Label::textColourId, isBlacklisted ? juce::Colours::red : columnId == nameCol ? defaultTextColour
+                                                                                                : defaultTextColour.interpolatedWith(juce::Colours::transparentBlack, 0.3f));
+        label->setFont(owner.withDefaultMetrics(juce::FontOptions((float) height, juce::Font::bold)));
+        label->setText(text, juce::NotificationType::dontSendNotification);
+
+        if (existingComponentToUpdate == nullptr)
         {
-            const auto defaultTextColour = owner.findColour(juce::ListBox::textColourId);
-            g.setColour(isBlacklisted         ? juce::Colours::red
-                        : columnId == nameCol ? defaultTextColour
-                                              : defaultTextColour.interpolatedWith(juce::Colours::transparentBlack, 0.3f));
-            g.setFont(owner.withDefaultMetrics(juce::FontOptions((float) height * 0.7f, juce::Font::bold)));
-            g.drawFittedText(text, 4, 0, width - 6, height, juce::Justification::centredLeft, 1, 0.9f);
+            return label.release();
         }
+        delete existingComponentToUpdate;
+        return label.release();
     }
 
     void MyTableListBoxModel::cellClicked(int rowNumber, int columnId, const juce::MouseEvent& e)
