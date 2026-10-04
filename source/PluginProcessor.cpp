@@ -460,6 +460,15 @@ void PluginProcessor::propagateState()
     shared_data_manager_.updateInnerState(this, mb);
 }
 
+bool PluginProcessor::innerSupportsSidechain() const
+{
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+
+    if ((*inner) == nullptr) return false;
+    return (*inner)->getBusCount(kInput) > 1;
+}
+
 bool PluginProcessor::getAcceptChanges() const
 {
     return accept_changes_;

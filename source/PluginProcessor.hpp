@@ -93,6 +93,7 @@ public:
     bool isAnInnerLoaded() const;
     bool wantsInnerEditor() const;
     void propagateState();
+    bool innerSupportsSidechain() const;
 
     bool getAcceptChanges() const;
     void setAcceptChanges(bool accept);

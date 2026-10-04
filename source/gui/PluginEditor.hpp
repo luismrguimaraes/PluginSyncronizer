@@ -64,6 +64,7 @@ namespace gui
         juce::ToggleButton propagate_changes_toggle_ { "Send Parameter Changes" };
 
         juce::Label inner_name_;
+        juce::Label supports_sidechain_;
 
         juce::Component main_component_; // this allows rescaling the whole plugin with a juce::AffineTransform
     };

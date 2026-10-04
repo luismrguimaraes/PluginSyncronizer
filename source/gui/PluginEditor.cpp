@@ -164,9 +164,10 @@ namespace gui
 #endif
 
         inner_name_.setJustificationType(juce::Justification::centred);
+        supports_sidechain_.setJustificationType(juce::Justification::centred);
+        supports_sidechain_.setText("Supports Sidechain", juce::NotificationType::dontSendNotification);
         main_component_.addChildComponent(inner_name_);
-
-        pluginChanged();
+        main_component_.addChildComponent(supports_sidechain_);
 
         remove_button_.onClick = [this] { clearPlugin(); };
         show_button_.onClick = [this] {
@@ -234,20 +235,20 @@ namespace gui
             auto buttons_left_area = left.withSizeKeepingCentre(kButtonWidth, 2 * kButtonHeight + kMargin);
             accept_changes_toggle_.setBounds(buttons_left_area.removeFromTop(kButtonHeight));
             buttons_left_area.removeFromTop(kMargin);
-            // sidechain info
+            supports_sidechain_.setBounds(buttons_left_area.removeFromTop(kButtonHeight));
 
             loader_->setBounds(getBounds());
         }
 
         setSize(kEditorWidth * user_scale, kEditorHeight * user_scale);
 
+        pluginChanged();
+
         updateUI();
         ui_update_timer_.startTimer(kUIUpdateIntervalMs);
     }
 
-    PluginEditor::~PluginEditor()
-    {
-    }
+    PluginEditor::~PluginEditor() {}
 
     void PluginEditor::paint(juce::Graphics& g)
     {
@@ -313,6 +314,8 @@ namespace gui
         {
             showInnerEditor(false);
         }
+
+        supports_sidechain_.setText(processor_ref_.innerSupportsSidechain() ? "Supports Sidechain" : "", juce::NotificationType::dontSendNotification);
     }
 
     void PluginEditor::clearPlugin()
@@ -337,6 +340,7 @@ namespace gui
         accept_changes_toggle_.setVisible(is_loaded);
         propagate_changes_toggle_.setVisible(is_loaded);
         propagate_state_button_.setVisible(is_loaded);
+        supports_sidechain_.setVisible(is_loaded);
 
 #ifdef DEBUG
         inspect_button_.setVisible(true);
