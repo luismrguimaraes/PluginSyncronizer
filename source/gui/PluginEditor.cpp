@@ -6,11 +6,12 @@
 
 namespace
 {
-    constexpr auto kButtonHeight = 30;
-    constexpr auto kMargin = 10;
+    constexpr int kButtonHeight { 30 };
+    constexpr int kButtonWidth { 130 };
+    constexpr int kMargin { 10 };
 
-    constexpr auto kEditorHeight { 500 };
-    constexpr auto kEditorWidth { 750 };
+    constexpr int kEditorHeight { 500 };
+    constexpr int kEditorWidth { 750 };
 
     constexpr int kUIUpdateIntervalMs { 22 };
 }
@@ -158,6 +159,10 @@ namespace gui
         main_component_.addChildComponent(propagate_changes_toggle_);
         main_component_.addChildComponent(loader_.get());
 
+#ifdef DEBUG
+        main_component_.addChildComponent(inspect_button_);
+#endif
+
         inner_name_.setJustificationType(juce::Justification::centred);
         main_component_.addChildComponent(inner_name_);
 
@@ -183,7 +188,6 @@ namespace gui
         };
 
 #ifdef DEBUG
-        // addAndMakeVisible(inspect_button_);
         inspect_button_.onClick = [&] {
             if (!inspector_)
             {
@@ -199,19 +203,38 @@ namespace gui
         {
             main_component_.setSize(kEditorWidth, kEditorHeight);
 
-            auto area_if_centered = getBounds().withSizeKeepingCentre(200, kButtonHeight);
+#ifdef DEBUG
+            inspect_button_.setBounds(getWidth() - 100, kMargin, 100 - kMargin, kButtonHeight);
+#endif
 
-            remove_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
+            auto bounds = getBounds();
+            auto one_third_width = static_cast<int>(1.0 / 3.0 * kEditorWidth);
+            auto left = bounds.removeFromLeft(one_third_width);
+            auto offset = static_cast<int>((one_third_width - kButtonWidth) / 4.0);
+            left.setX(left.getX() + offset);
+            auto right = bounds.removeFromRight(one_third_width);
+            right.setX(right.getX() - offset);
 
-            auto remove_button_bounds = remove_button_.getBounds();
-            inner_name_.setBounds(remove_button_bounds.withY(remove_button_bounds.getY() - 2 * kButtonHeight));
+            auto center = bounds;
+
+            auto buttons_centered_area = center.withSizeKeepingCentre(kButtonWidth, 2 * kButtonHeight + kMargin);
+            show_button_.setBounds(buttons_centered_area.removeFromTop(kButtonHeight));
+            buttons_centered_area.removeFromTop(kMargin);
+            remove_button_.setBounds(buttons_centered_area.removeFromTop(kButtonHeight));
+
+            auto show_button_button_bounds = show_button_.getBounds();
+            inner_name_.setBounds(show_button_button_bounds.withY(show_button_button_bounds.getY() - 2 * kButtonHeight).withSizeKeepingCentre(1.5 * kButtonWidth, kButtonHeight));
             inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
 
-            show_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + kButtonHeight));
-            propagate_state_button_.setBounds(area_if_centered.withY(area_if_centered.getY() + 2 * kButtonHeight));
+            auto buttons_right_area = right.withSizeKeepingCentre(kButtonWidth, 2 * kButtonHeight + kMargin);
+            propagate_changes_toggle_.setBounds(buttons_right_area.removeFromTop(kButtonHeight));
+            buttons_right_area.removeFromTop(kMargin);
+            propagate_state_button_.setBounds(buttons_right_area.removeFromTop(kButtonHeight));
 
-            accept_changes_toggle_.setBounds(remove_button_.getBounds().withX(0));
-            propagate_changes_toggle_.setBounds(show_button_.getBounds().withX(0));
+            auto buttons_left_area = left.withSizeKeepingCentre(kButtonWidth, 2 * kButtonHeight + kMargin);
+            accept_changes_toggle_.setBounds(buttons_left_area.removeFromTop(kButtonHeight));
+            buttons_left_area.removeFromTop(kMargin);
+            // sidechain info
 
             loader_->setBounds(getBounds());
         }
@@ -314,6 +337,10 @@ namespace gui
         accept_changes_toggle_.setVisible(is_loaded);
         propagate_changes_toggle_.setVisible(is_loaded);
         propagate_state_button_.setVisible(is_loaded);
+
+#ifdef DEBUG
+        inspect_button_.setVisible(true);
+#endif
 
         loader_->setVisible(!is_loaded);
     }
