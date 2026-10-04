@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../PluginProcessor.h"
+#include "../PluginProcessor.hpp"
 #include "melatonin_inspector/melatonin_inspector.h"
 
 namespace gui

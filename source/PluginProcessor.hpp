@@ -5,6 +5,9 @@
 #include "farbot/include/farbot/AsyncCaller.hpp"
 #include "farbot/include/farbot/RealtimeObject.hpp"
 #include "farbot/include/farbot/fifo.hpp"
+#include "juce_core/system/juce_PlatformDefs.h"
+#include "utils.hpp"
+#include <exception>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <vector>
 
@@ -15,6 +18,36 @@
 enum class EditorStyle {
     thisWindow,
     newWindow
+};
+
+struct EditorProps
+{
+    void getStateInformation(juce::MemoryBlock& destData, juce::File logs_directory)
+    {
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+
+        juce::XmlElement xml { utils::kEditorPropsTag };
+        xml.setAttribute("user_scale", user_scale);
+
+        xml.writeTo(logs_directory.getChildFile("EditorPropsStateLog.xml"));
+
+        const auto xlm_as_string = xml.toString();
+        destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());
+    }
+
+    void setStateInformation(const void* data, int sizeInBytes)
+    {
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+
+        auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), static_cast<size_t>(sizeInBytes)));
+        require(xml != nullptr);
+
+        auto recovered_user_scale = xml->getDoubleAttribute("user_scale", -1.0);
+        require(recovered_user_scale > 0);
+        user_scale = static_cast<float>(recovered_user_scale);
+    }
+
+    float user_scale { 1.0 };
 };
 
 class PluginProcessor : public juce::AudioProcessor, public SharedData::Listener, private juce::ChangeListener, private juce::AudioProcessorListener
@@ -88,6 +121,9 @@ public:
     void numBusesChanged() override;
     void processorLayoutsChanged() override;
 
+    float getUserScale();
+    void setUserScale(float user_scale);
+
     // For Tests
     void setInnerParameter(int parameterIndex, float newValue);
     float getInnerParameter(int parameterIndex) const;
@@ -113,7 +149,6 @@ private:
 
     mutable NRTMAudioPluginInstance inner_;
     std::optional<juce::PluginDescription> inner_plugin_description_;
-    EditorStyle editor_style_ = EditorStyle {};
     juce::ScopedMessageBox message_box_;
 
     bool is_an_inner_loaded_ { false };
@@ -135,6 +170,8 @@ private:
 
     farbot::AsyncCaller<farbot::fifo_options::concurrency::multiple> async_caller_;
     juce::TimedCallback async_call_processing_timer_;
+
+    EditorProps editor_props_;
 
 #ifdef DEBUG
     JuceDebugger juce_debugger_;

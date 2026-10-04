@@ -4,10 +4,11 @@
 namespace utils
 {
 #define require(expression) \
-    if (!(expression)) std::terminate;
+    if (!(expression)) std::terminate();
 
     inline const juce::String kMainStateTag { "state" };
     inline const juce::String kSharedStateTag { "shared_state" };
+    inline const juce::String kEditorPropsTag { "editor_props_state" };
 
     bool
         try_other_layouts(juce::AudioProcessor::Bus* bus, juce::AudioChannelSet& requested);

@@ -1,9 +1,8 @@
-#include "PluginProcessor.h"
+#include "PluginProcessor.hpp"
 #include "SharedData.hpp"
 #include "farbot/include/farbot/RealtimeObject.hpp"
-#include "gui/PluginEditor.h"
+#include "gui/PluginEditor.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
-#include "utils.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
@@ -18,8 +17,6 @@ namespace
 {
     inline const juce::String kInnerStateTag = "inner_state";
     inline const juce::String kGroupTag = "group";
-    inline const juce::String kEditorStyleTag = "editor_style";
-    inline const juce::String kSharedDataManStateTag = "shared_data";
 
     constexpr int kAsyncCallProcessingMs { 5 };
     constexpr int kSupportedNumChannels { 2 };
@@ -265,12 +262,12 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce_debugger_.readInput(buffer);
 #endif
 
-    jassert(inner_process_buffer_.getNumChannels() <= buffer.getNumChannels()
-            && inner_process_buffer_.getNumSamples() == buffer.getNumSamples());
-    for (auto ch = 0; ch < inner_process_buffer_.getNumChannels(); ch++)
+    jassert(inner_process_buffer_.getNumSamples() == buffer.getNumSamples());
+    int num_samples = std::min(inner_process_buffer_.getNumSamples(), buffer.getNumSamples());
+    for (auto ch = 0; ch < std::min(inner_process_buffer_.getNumChannels(), buffer.getNumChannels()); ch++)
     {
         auto channel_data = inner_process_buffer_.getWritePointer(ch);
-        for (auto i = 0; i < inner_process_buffer_.getNumSamples(); i++)
+        for (auto i = 0; i < num_samples; i++)
         {
             channel_data[i] = buffer.getReadPointer(ch)[i];
         }
@@ -280,6 +277,15 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (*inner != nullptr)
     {
         (*inner)->processBlock(inner_process_buffer_, midiMessages);
+    }
+
+    for (auto ch = 0; ch < std::min(inner_process_buffer_.getNumChannels(), buffer.getNumChannels()); ch++)
+    {
+        auto channel_data = buffer.getWritePointer(ch);
+        for (auto i = 0; i < num_samples; i++)
+        {
+            channel_data[i] = inner_process_buffer_.getReadPointer(ch)[i];
+        }
     }
 
 #ifdef DEBUG
@@ -321,33 +327,40 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 
     juce::XmlElement xml { utils::kMainStateTag };
 
-    auto groupNode = std::make_unique<juce::XmlElement>(kGroupTag);
-    groupNode->addTextElement(juce::String { group_ });
-    xml.addChildElement(groupNode.release());
+    xml.setAttribute(kGroupTag, group_);
 
-    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
-    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-    if (*inner != nullptr)
+    xml.addChildElement([this] {
+        juce::MemoryBlock state;
+        editor_props_.getStateInformation(state, logs_directory_);
+
+        auto stateNode = std::make_unique<juce::XmlElement>(utils::kEditorPropsTag);
+        stateNode->addTextElement(state.toBase64Encoding());
+        return stateNode.release();
+    }());
+
     {
-        xml.setAttribute(kEditorStyleTag, (int) editor_style_);
-        xml.addChildElement((*inner)->getPluginDescription().createXml().release());
-        xml.addChildElement([&inner] {
-            juce::MemoryBlock inner_state;
-            (*inner)->getStateInformation(inner_state);
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+        if (*inner != nullptr)
+        {
+            xml.addChildElement((*inner)->getPluginDescription().createXml().release());
+            xml.addChildElement([&inner] {
+                juce::MemoryBlock state;
+                (*inner)->getStateInformation(state);
 
-            auto stateNode = std::make_unique<juce::XmlElement>(kInnerStateTag);
-            stateNode->addTextElement(inner_state.toBase64Encoding());
-            return stateNode.release();
-        }());
+                auto stateNode = std::make_unique<juce::XmlElement>(kInnerStateTag);
+                stateNode->addTextElement(state.toBase64Encoding());
+                return stateNode.release();
+            }());
+        }
     }
 
     xml.addChildElement([this] {
-        juce::MemoryBlock shared_state;
-        shared_data_manager_.getStateInformation(shared_state, logs_directory_);
+        juce::MemoryBlock state;
+        shared_data_manager_.getStateInformation(state, logs_directory_);
 
-        jassert(kSharedDataManStateTag != utils::kSharedStateTag);
-        auto stateNode = std::make_unique<juce::XmlElement>(kSharedDataManStateTag);
-        stateNode->addTextElement(shared_state.toBase64Encoding());
+        auto stateNode = std::make_unique<juce::XmlElement>(utils::kSharedStateTag);
+        stateNode->addTextElement(state.toBase64Encoding());
         return stateNode.release();
     }());
 
@@ -366,7 +379,8 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 
     auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), static_cast<size_t>(sizeInBytes)));
 
-    group_ = xml->getIntAttribute(kGroupTag, 0);
+    group_ = xml->getIntAttribute(kGroupTag, -1);
+    require(group_ != -1);
 
     if (auto* plugin_description_node = xml->getChildByName("PLUGIN"))
     {
@@ -375,14 +389,18 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 
         juce::MemoryBlock inner_state;
         inner_state.fromBase64Encoding(xml->getChildElementAllSubText(kInnerStateTag, {}));
-        jassert(!inner_state.isEmpty());
+        require(!inner_state.isEmpty());
 
         setNewPlugin(pd, inner_state);
     }
 
     juce::MemoryBlock shared_data_man_state;
-    shared_data_man_state.fromBase64Encoding(xml->getChildElementAllSubText(kSharedDataManStateTag, {}));
+    shared_data_man_state.fromBase64Encoding(xml->getChildElementAllSubText(utils::kSharedStateTag, {}));
     shared_data_manager_.setStateInformation(shared_data_man_state.getData(), static_cast<int>(shared_data_man_state.getSize()));
+
+    juce::MemoryBlock editor_props_state;
+    editor_props_state.fromBase64Encoding(xml->getChildElementAllSubText(utils::kEditorPropsTag, {}));
+    editor_props_.setStateInformation(editor_props_state.getData(), static_cast<int>(editor_props_state.getSize()));
 
     accept_changes_ = xml->getBoolAttribute("accept_changes");
     propagate_changes_.store(xml->getBoolAttribute("propagate_changes"));
@@ -514,6 +532,16 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     notifyHost();
 }
 
+float PluginProcessor::getUserScale()
+{
+    return editor_props_.user_scale;
+}
+
+void PluginProcessor::setUserScale(float user_scale)
+{
+    editor_props_.user_scale = user_scale;
+}
+
 void PluginProcessor::setInnerParameter(int parameterIndex, float newValue)
 {
 #ifndef TESTS_TARGET
@@ -619,7 +647,6 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
             inner_prepared = true;
         }
 
-        editor_style_ = EditorStyle::newWindow;
         instance->addListener(this);
 
         setLatencySamples(instance->getLatencySamples());
@@ -758,7 +785,9 @@ std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor()
 
 EditorStyle PluginProcessor::getEditorStyle() const noexcept
 {
-    return editor_style_;
+    // This is not good, this EditorStyle should probably go away,
+    // but it may be insteresting to try the other style it in the future
+    return EditorStyle::newWindow;
 }
 
 void PluginProcessor::changeListenerCallback(juce::ChangeBroadcaster* source)

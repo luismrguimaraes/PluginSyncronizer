@@ -1,5 +1,4 @@
-#include "PluginEditor.h"
-#include "../utils.hpp"
+#include "PluginEditor.hpp"
 #include "MyTableListBoxModel.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
 #include <algorithm>
@@ -146,6 +145,7 @@ namespace gui
             p.createSharedPluginInstance(pd, editorStyle);
         });
 
+        auto user_scale = processor_ref_.getUserScale();
         setSize(kEditorWidth, kEditorHeight);
         setResizable(true, true);
 
@@ -197,9 +197,9 @@ namespace gui
 
         // setBounds
         {
-            main_component_.setBounds({ 0, 0, kEditorWidth, kEditorHeight });
+            main_component_.setSize(kEditorWidth, kEditorHeight);
 
-            auto area_if_centered = getLocalBounds().withSizeKeepingCentre(200, kButtonHeight);
+            auto area_if_centered = getBounds().withSizeKeepingCentre(200, kButtonHeight);
 
             remove_button_.setBounds(area_if_centered.withY(area_if_centered.getY() - kButtonHeight));
 
@@ -213,8 +213,10 @@ namespace gui
             accept_changes_toggle_.setBounds(remove_button_.getBounds().withX(0));
             propagate_changes_toggle_.setBounds(show_button_.getBounds().withX(0));
 
-            loader_->setBounds(getLocalBounds());
+            loader_->setBounds(getBounds());
         }
+
+        setSize(kEditorWidth * user_scale, kEditorHeight * user_scale);
 
         updateUI();
         ui_update_timer_.startTimer(kUIUpdateIntervalMs);
@@ -237,14 +239,10 @@ namespace gui
         float new_height = bounds.getHeight();
         float scale = std::min(new_width / static_cast<float>(kEditorWidth), new_height / static_cast<float>(kEditorHeight));
         scale = std::clamp(scale, 0.5f, 4.0f);
-        // const std::vector<float> scale_values { 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0 };
-        // auto bounded_scale = std::lower_bound(scale_values.begin(), scale_values.end(), scale);
-        // scale = bounded_scale != scale_values.end() ? *bounded_scale : 1.0;
+
         main_component_.setTransform(juce::AffineTransform::scale(scale));
-
-        // processor_ref_.setUserScale()
-
         setSize(kEditorWidth * scale, kEditorHeight * scale);
+        processor_ref_.setUserScale(scale);
     }
 
     void PluginEditor::childBoundsChanged([[maybe_unused]] Component* child)
