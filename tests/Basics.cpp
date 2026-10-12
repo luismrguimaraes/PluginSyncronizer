@@ -1,8 +1,7 @@
 #include "helpers/test_ui_helpers.h"
 #include "helpers/test_utils.hpp"
-#include "utils.hpp"
 
-#include <PluginProcessor.h>
+#include <PluginProcessor.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
