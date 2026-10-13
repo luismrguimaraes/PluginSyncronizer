@@ -83,6 +83,7 @@ namespace gui
 
         void resized() override
         {
+            if (editor_ == nullptr) return;
             editor_->setSize(getWidth(), getHeight());
         }
 
@@ -224,7 +225,7 @@ namespace gui
             remove_button_.setBounds(buttons_centered_area.removeFromTop(kButtonHeight));
 
             auto show_button_button_bounds = show_button_.getBounds();
-            inner_name_.setBounds(show_button_button_bounds.withY(show_button_button_bounds.getY() - 2 * kButtonHeight).withSizeKeepingCentre(1.5 * kButtonWidth, kButtonHeight));
+            inner_name_.setBounds(show_button_button_bounds.withY(show_button_button_bounds.getY() - 2 * kButtonHeight).withSizeKeepingCentre(2.0 * kButtonWidth, kButtonHeight));
             inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
 
             auto buttons_right_area = right.withSizeKeepingCentre(kButtonWidth, 2 * kButtonHeight + kMargin);
@@ -358,7 +359,7 @@ namespace gui
         }
 
         auto inner_editor = processor_ref_.createInnerEditor();
-        auto make_inner_editor_resizable = inner_editor->resizableCorner == nullptr && inner_editor->isResizable();
+        auto make_inner_editor_resizable = inner_editor != nullptr && inner_editor->resizableCorner == nullptr && inner_editor->isResizable();
         auto editorComponent = std::make_unique<PluginEditorComponent>(std::move(inner_editor));
         inner_editor_component_ = editorComponent.get();
         inner_editor_component_->setScaleFactor(host_scale_factor_);
