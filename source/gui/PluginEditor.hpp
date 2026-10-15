@@ -69,6 +69,8 @@ namespace gui
         juce::Label no_scanned_plugins_;
         juce::Label click_here_to_scan_;
 
+        juce::LookAndFeel_V4 look_and_feel_;
+
         juce::Component main_component_; // this allows rescaling the whole plugin with a juce::AffineTransform
     };
 }

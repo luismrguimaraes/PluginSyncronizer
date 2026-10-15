@@ -215,6 +215,16 @@ namespace gui
             inspector_->setVisible(true);
         };
 #endif
+        {
+            look_and_feel_.setColour(juce::ResizableWindow::backgroundColourId, juce::Colour { 0xFF2a2e41 });
+            look_and_feel_.setColour(juce::ListBox::backgroundColourId, juce::Colour { 0xFF2a2e41 });
+
+            look_and_feel_.setColour(juce::TextButton::buttonColourId, juce::Colour(juce::Colour { 0xFF7e6207 }));
+            look_and_feel_.setColour(juce::TextButton::buttonOnColourId, juce::Colour(juce::Colour { 0xFF7e6207 }.brighter()));
+
+            setLookAndFeel(&look_and_feel_);
+            main_component_.setLookAndFeel(&look_and_feel_);
+        }
 
         // setBounds
         {
@@ -270,7 +280,10 @@ namespace gui
         ui_update_timer_.startTimer(kUIUpdateIntervalMs);
     }
 
-    PluginEditor::~PluginEditor() {}
+    PluginEditor::~PluginEditor()
+    {
+        setLookAndFeel(nullptr);
+    }
 
     void PluginEditor::paint(juce::Graphics& g)
     {
