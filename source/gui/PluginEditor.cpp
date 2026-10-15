@@ -255,7 +255,7 @@ namespace gui
             buttons_centered_area.removeFromTop(kMargin);
             remove_button_.setBounds(buttons_centered_area.removeFromTop(kButtonHeight));
             auto show_button_button_bounds = show_button_.getBounds();
-            inner_name_.setBounds(show_button_button_bounds.withY(show_button_button_bounds.getY() - 2 * kButtonHeight).withSizeKeepingCentre(2.0 * kButtonWidth, kButtonHeight));
+            inner_name_.setBounds(show_button_button_bounds.withY(show_button_button_bounds.getY() - 2 * kButtonHeight).withSizeKeepingCentre(getWidth(), kButtonHeight));
             inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
 
             auto buttons_right_area = right.withSizeKeepingCentre(kButtonWidth, 2 * kButtonHeight + kMargin);
