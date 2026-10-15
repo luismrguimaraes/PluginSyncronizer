@@ -143,7 +143,7 @@ namespace gui
     PluginEditor::PluginEditor(PluginProcessor& p, juce::File logs_directory)
         : AudioProcessorEditor { &p }, processor_ref_ { p }, scoped_callback_ { p.plugin_changed_, [this] { pluginChanged(); } }, ui_update_timer_ { [this]() { updateUI(); } }
     {
-        loader_ = std::make_unique<PluginLoaderComponent>(p.plugin_format_manager_, p.plugin_list_, logs_directory, [&p](const juce::PluginDescription& pd, EditorStyle editorStyle) {
+        loader_ = std::make_unique<PluginLoaderComponent>(p.plugin_format_manager_, p.getPluginList(), logs_directory, [&p](const juce::PluginDescription& pd, EditorStyle editorStyle) {
             p.createSharedPluginInstance(pd, editorStyle);
         });
 
@@ -167,8 +167,23 @@ namespace gui
         inner_name_.setJustificationType(juce::Justification::centred);
         supports_sidechain_.setJustificationType(juce::Justification::centred);
         supports_sidechain_.setText("Supports Sidechain", juce::NotificationType::dontSendNotification);
+
+        version_info_.setJustificationType(juce::Justification::centredRight);
+        version_info_.setText(processor_ref_.getName() + " version: " + VERSION, juce::NotificationType::dontSendNotification);
+        version_info_.setColour(juce::Label::ColourIds::textColourId, getLookAndFeel().findColour(juce::Label::ColourIds::textColourId).darker());
+
+        no_scanned_plugins_.setJustificationType(juce::Justification::centred);
+        no_scanned_plugins_.setText("No scanned plugins", juce::NotificationType::dontSendNotification);
+        no_scanned_plugins_.setFont(juce::FontOptions { 16 });
+
+        click_here_to_scan_.setJustificationType(juce::Justification::centredLeft);
+        click_here_to_scan_.setText("<= click here to scan", juce::NotificationType::dontSendNotification);
+
         main_component_.addChildComponent(inner_name_);
         main_component_.addChildComponent(supports_sidechain_);
+        main_component_.addChildComponent(version_info_);
+        main_component_.addChildComponent(no_scanned_plugins_);
+        main_component_.addChildComponent(click_here_to_scan_);
 
         remove_button_.onClick = [this] { clearPlugin(); };
         show_button_.onClick = [this] {
@@ -210,6 +225,11 @@ namespace gui
 #endif
 
             auto bounds = getBounds();
+
+            auto version_info_bounds = bounds.removeFromBottom(kButtonHeight).removeFromRight(300 + kMargin).withWidth(300);
+            version_info_bounds.setX(version_info_bounds.getX() - kMargin);
+            version_info_.setBounds(version_info_bounds);
+
             auto one_third_width = static_cast<int>(1.0 / 3.0 * kEditorWidth);
             auto left = bounds.removeFromLeft(one_third_width);
             auto offset = static_cast<int>((one_third_width - kButtonWidth) / 4.0);
@@ -218,12 +238,12 @@ namespace gui
             right.setX(right.getX() - offset);
 
             auto center = bounds;
+            no_scanned_plugins_.setBounds(center);
 
             auto buttons_centered_area = center.withSizeKeepingCentre(kButtonWidth, 2 * kButtonHeight + kMargin);
             show_button_.setBounds(buttons_centered_area.removeFromTop(kButtonHeight));
             buttons_centered_area.removeFromTop(kMargin);
             remove_button_.setBounds(buttons_centered_area.removeFromTop(kButtonHeight));
-
             auto show_button_button_bounds = show_button_.getBounds();
             inner_name_.setBounds(show_button_button_bounds.withY(show_button_button_bounds.getY() - 2 * kButtonHeight).withSizeKeepingCentre(2.0 * kButtonWidth, kButtonHeight));
             inner_name_.setCentrePosition(inner_name_.getBounds().getCentre());
@@ -239,6 +259,7 @@ namespace gui
             supports_sidechain_.setBounds(buttons_left_area.removeFromTop(kButtonHeight));
 
             loader_->setBounds(getBounds());
+            click_here_to_scan_.setBounds(loader_->getBounds().removeFromBottom(kButtonHeight).removeFromRight(getBounds().getWidth() - 83 - kMargin));
         }
 
         setSize(kEditorWidth * user_scale, kEditorHeight * user_scale);
@@ -335,6 +356,8 @@ namespace gui
     {
         auto is_loaded = processor_ref_.isAnInnerLoaded();
 
+        version_info_.setVisible(true);
+
         inner_name_.setVisible(is_loaded);
         remove_button_.setVisible(is_loaded);
         show_button_.setVisible(is_loaded);
@@ -342,6 +365,9 @@ namespace gui
         propagate_changes_toggle_.setVisible(is_loaded);
         propagate_state_button_.setVisible(is_loaded);
         supports_sidechain_.setVisible(is_loaded);
+
+        no_scanned_plugins_.setVisible(processor_ref_.getPluginList().getTypes().isEmpty());
+        click_here_to_scan_.setVisible(processor_ref_.getPluginList().getTypes().isEmpty());
 
 #ifdef DEBUG
         inspect_button_.setVisible(true);

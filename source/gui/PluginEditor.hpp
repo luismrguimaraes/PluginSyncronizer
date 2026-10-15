@@ -65,6 +65,9 @@ namespace gui
 
         juce::Label inner_name_;
         juce::Label supports_sidechain_;
+        juce::Label version_info_;
+        juce::Label no_scanned_plugins_;
+        juce::Label click_here_to_scan_;
 
         juce::Component main_component_; // this allows rescaling the whole plugin with a juce::AffineTransform
     };

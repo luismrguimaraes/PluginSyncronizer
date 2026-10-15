@@ -125,16 +125,15 @@ public:
     float getUserScale();
     void setUserScale(float user_scale);
 
+    juce::KnownPluginList& getPluginList() noexcept;
+
     // For Tests
     void setInnerParameter(int parameterIndex, float newValue);
     float getInnerParameter(int parameterIndex) const;
     juce::AudioProcessor* getInner(); // not const, but changing this will not change the NonRTMutatable
 
 public:
-    juce::ApplicationProperties app_properties_;
-    juce::File logs_directory_;
     juce::AudioPluginFormatManager plugin_format_manager_;
-    juce::KnownPluginList plugin_list_;
     std::function<void()> plugin_changed_;
 
 private:
@@ -146,8 +145,11 @@ private:
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)
 
-    using NRTMAudioPluginInstance = farbot::RealtimeObject<std::shared_ptr<juce::AudioPluginInstance>, farbot::RealtimeObjectOptions::nonRealtimeMutatable>;
+    juce::ApplicationProperties app_properties_;
+    juce::File logs_directory_;
+    juce::KnownPluginList plugin_list_;
 
+    using NRTMAudioPluginInstance = farbot::RealtimeObject<std::shared_ptr<juce::AudioPluginInstance>, farbot::RealtimeObjectOptions::nonRealtimeMutatable>;
     mutable NRTMAudioPluginInstance inner_;
     std::optional<juce::PluginDescription> inner_plugin_description_;
     juce::ScopedMessageBox message_box_;

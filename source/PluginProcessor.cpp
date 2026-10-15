@@ -551,6 +551,11 @@ void PluginProcessor::setUserScale(float user_scale)
     editor_props_.user_scale = user_scale;
 }
 
+juce::KnownPluginList& PluginProcessor::getPluginList() noexcept
+{
+    return plugin_list_;
+}
+
 void PluginProcessor::setInnerParameter(int parameterIndex, float newValue)
 {
 #ifndef TESTS_TARGET
