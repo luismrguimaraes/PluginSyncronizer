@@ -12,3 +12,6 @@ private:
     std::vector<std::vector<float>> juce_input_buffer_debugger_;
     std::vector<std::vector<float>> juce_output_buffer_debugger_;
 };
+
+void fill_with_silence(juce::AudioBuffer<float>& buffer_to_fill);
+bool is_silence(juce::AudioBuffer<float>& buffer);

@@ -1,27 +1,27 @@
-#include <PluginProcessor.h>
+#include <PluginProcessor.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-TEST_CASE("one is equal to one", "[dummy]")
+TEST_CASE("one is equal to one", "")
 {
     REQUIRE(1 == 1);
 }
 
-TEST_CASE("Plugin instance", "[instance]")
+TEST_CASE("Plugin instance", "")
 {
     PluginProcessor testPlugin;
 
     SECTION("name")
     {
         CHECK_THAT(testPlugin.getName().toStdString(),
-            Catch::Matchers::Equals("Plugin Host"));
+            Catch::Matchers::Equals("Plugin Syncronizer"));
     }
 }
 
 #ifdef PAMPLEJUCE_IPP
     #include <ipp.h>
 
-TEST_CASE("IPP version", "[ipp]")
+TEST_CASE("IPP version", "")
 {
     #if defined(__APPLE__)
     // macOS uses 2021.9.1 from pip wheel (only x86_64 version available)

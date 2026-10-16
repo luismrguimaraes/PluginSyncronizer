@@ -1,8 +1,7 @@
 #include "helpers/test_ui_helpers.h"
 #include "helpers/test_utils.hpp"
-#include "utils.hpp"
 
-#include <PluginProcessor.h>
+#include <PluginProcessor.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -12,7 +11,7 @@
 
 TEST_CASE("Loads state correctly", "[State]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
     auto* messageManager = juce::MessageManager::getInstance();
@@ -56,7 +55,7 @@ TEST_CASE("Loads state correctly", "[State]")
 
 TEST_CASE("Loads state correctly when there is more than one instance", "[State]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
     auto* messageManager = juce::MessageManager::getInstance();
@@ -136,7 +135,7 @@ TEST_CASE("Loads state correctly when there is more than one instance", "[State]
 
 TEST_CASE("Creating a new instance loads an inner if there is a shared plugin description", "[Sync]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
 
@@ -154,6 +153,7 @@ TEST_CASE("Creating a new instance loads an inner if there is a shared plugin de
     });
 
     CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
+    CHECK(is_inner_loaded_and_pd_has_value(processor1));
 
     PluginProcessor processor2;
     CHECK(processor2.getPluginDescription().has_value());
@@ -161,12 +161,12 @@ TEST_CASE("Creating a new instance loads an inner if there is a shared plugin de
 
     CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
 
-    check_inner_loaded_and_pd_has_value(processor2);
+    CHECK(is_inner_loaded_and_pd_has_value(processor2));
 }
 
 TEST_CASE("Changing one instance inner params also change the other instances inner params (if the respective options are enabled)", "[Sync]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
 
@@ -187,9 +187,9 @@ TEST_CASE("Changing one instance inner params also change the other instances in
 
     CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
 
-    check_inner_loaded_and_pd_has_value(processor1);
-    check_inner_loaded_and_pd_has_value(processor2);
-    check_inner_loaded_and_pd_has_value(processor3);
+    CHECK(is_inner_loaded_and_pd_has_value(processor1));
+    CHECK(is_inner_loaded_and_pd_has_value(processor2));
+    CHECK(is_inner_loaded_and_pd_has_value(processor3));
 
     constexpr float kOriginalVal { 0.0 };
     constexpr float kIntermediateVal { 0.25 };
@@ -225,4 +225,45 @@ TEST_CASE("Changing one instance inner params also change the other instances in
     CHECK(juce::exactlyEqual(processor1.getInnerParameter(kParamIndex), kLastVal));
     CHECK(juce::exactlyEqual(processor2.getInnerParameter(kParamIndex), kLastVal));
     CHECK(juce::exactlyEqual(processor3.getInnerParameter(kParamIndex), kIntermediateVal));
+}
+
+TEST_CASE("Is a inner loaded", "[Sync][InnerLoading]")
+{
+#ifndef JUCE_MAC
+    return;
+#endif
+
+    auto* messageManager = juce::MessageManager::getInstance();
+    REQUIRE(messageManager != nullptr);
+
+    auto pd = get_pd_from_xml(kCentaurVST3);
+
+    PluginProcessor processor1;
+    runWithinPluginEditor(processor1, [pd, messageManager](PluginProcessor& processor) {
+        CHECK(!is_inner_loaded_and_pd_has_value(processor));
+
+        processor.createSharedPluginInstance(pd);
+        CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
+        CHECK(is_inner_loaded_and_pd_has_value(processor));
+
+        processor.removeInner();
+        CHECK(!is_inner_loaded_and_pd_has_value(processor));
+    });
+
+    PluginProcessor processor2;
+    runWithinPluginEditor(processor2, [pd, messageManager](PluginProcessor& processor) {
+        CHECK(!is_inner_loaded_and_pd_has_value(processor));
+
+        processor.createSharedPluginInstance(pd);
+        CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
+    });
+    CHECK(is_inner_loaded_and_pd_has_value(processor1));
+    CHECK(is_inner_loaded_and_pd_has_value(processor2));
+
+    runWithinPluginEditor(processor2, [pd](PluginProcessor& processor) {
+        processor.removeInner();
+    });
+
+    CHECK(!is_inner_loaded_and_pd_has_value(processor1));
+    CHECK(!is_inner_loaded_and_pd_has_value(processor2));
 }

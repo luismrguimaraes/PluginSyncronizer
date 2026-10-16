@@ -38,10 +38,9 @@ juce::PluginDescription get_pd_from_xml(juce::String xmlRelativePath)
     return pd;
 }
 
-void check_inner_loaded_and_pd_has_value(const PluginProcessor& processor)
+bool is_inner_loaded_and_pd_has_value(const PluginProcessor& processor)
 {
-    CHECK(processor.getPluginDescription().has_value());
-    CHECK(processor.isAnInnerLoaded());
+    return processor.getPluginDescription().has_value() && processor.isAnInnerLoaded();
 }
 
 void apply_state(PluginProcessor& processor, const juce::MemoryBlock& state)
@@ -51,6 +50,5 @@ void apply_state(PluginProcessor& processor, const juce::MemoryBlock& state)
 
 std::unique_ptr<juce::XmlElement> parse_state(const juce::MemoryBlock& state)
 {
-    auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(state.getData())), static_cast<size_t>(state.getSize())));
-    return xml;
+    return juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(state.getData())), static_cast<size_t>(state.getSize())));
 }

@@ -1,9 +1,8 @@
-#include "PluginProcessor.h"
+#include "PluginProcessor.hpp"
 #include "SharedData.hpp"
 #include "farbot/include/farbot/RealtimeObject.hpp"
-#include "gui/PluginEditor.h"
+#include "gui/PluginEditor.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
-#include "utils.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
@@ -18,8 +17,6 @@ namespace
 {
     inline const juce::String kInnerStateTag = "inner_state";
     inline const juce::String kGroupTag = "group";
-    inline const juce::String kEditorStyleTag = "editor_style";
-    inline const juce::String kSharedDataManStateTag = "shared_data";
 
     constexpr int kAsyncCallProcessingMs { 5 };
     constexpr int kSupportedNumChannels { 2 };
@@ -65,6 +62,10 @@ PluginProcessor::PluginProcessor()
     if (auto savedPluginList = app_properties_.getUserSettings()->getXmlValue("pluginList_"))
         plugin_list_.recreateFromXml(*savedPluginList);
 
+    juce::String logs_folder { "Logs" };
+    logs_directory_ = app_properties_.getUserSettings()->getFile().getParentDirectory().getChildFile(logs_folder);
+    logs_directory_.createDirectory();
+
     juce::MessageManagerLock lock; // why is this here?
     plugin_list_.addChangeListener(this);
 
@@ -85,10 +86,11 @@ PluginProcessor::~PluginProcessor()
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     {
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-        needs_editor_deletion_.store(true);
+        needs_editor_deletion_ = true;
         // make PluginEditor delete inner editor
         juce::NullCheckedInvocation::invoke(plugin_changed_);
         *inner = nullptr;
+        needs_editor_deletion_ = false;
     }
 
     shared_data_manager_.removeListener(this);
@@ -260,12 +262,12 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce_debugger_.readInput(buffer);
 #endif
 
-    jassert(inner_process_buffer_.getNumChannels() <= buffer.getNumChannels()
-            && inner_process_buffer_.getNumSamples() == buffer.getNumSamples());
-    for (auto ch = 0; ch < inner_process_buffer_.getNumChannels(); ch++)
+    jassert(inner_process_buffer_.getNumSamples() == buffer.getNumSamples());
+    int num_samples = std::min(inner_process_buffer_.getNumSamples(), buffer.getNumSamples());
+    for (auto ch = 0; ch < std::min(inner_process_buffer_.getNumChannels(), buffer.getNumChannels()); ch++)
     {
         auto channel_data = inner_process_buffer_.getWritePointer(ch);
-        for (auto i = 0; i < inner_process_buffer_.getNumSamples(); i++)
+        for (auto i = 0; i < num_samples; i++)
         {
             channel_data[i] = buffer.getReadPointer(ch)[i];
         }
@@ -275,6 +277,15 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (*inner != nullptr)
     {
         (*inner)->processBlock(inner_process_buffer_, midiMessages);
+    }
+
+    for (auto ch = 0; ch < std::min(inner_process_buffer_.getNumChannels(), buffer.getNumChannels()); ch++)
+    {
+        auto channel_data = buffer.getWritePointer(ch);
+        for (auto i = 0; i < num_samples; i++)
+        {
+            channel_data[i] = inner_process_buffer_.getReadPointer(ch)[i];
+        }
     }
 
 #ifdef DEBUG
@@ -306,7 +317,7 @@ bool PluginProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* PluginProcessor::createEditor()
 {
-    return new gui::PluginEditor(*this);
+    return new gui::PluginEditor(*this, logs_directory_);
 }
 
 //==============================================================================
@@ -316,42 +327,47 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 
     juce::XmlElement xml { utils::kMainStateTag };
 
-    auto groupNode = std::make_unique<juce::XmlElement>(kGroupTag);
-    groupNode->addTextElement(juce::String { group_ });
-    xml.addChildElement(groupNode.release());
+    xml.setAttribute(kGroupTag, group_);
 
-    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
-    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
-    if (*inner != nullptr)
+    xml.addChildElement([this] {
+        juce::MemoryBlock state;
+        editor_props_.getStateInformation(state, logs_directory_);
+
+        auto stateNode = std::make_unique<juce::XmlElement>(utils::kEditorPropsTag);
+        stateNode->addTextElement(state.toBase64Encoding());
+        return stateNode.release();
+    }());
+
     {
-        xml.setAttribute(kEditorStyleTag, (int) editor_style_);
-        xml.addChildElement((*inner)->getPluginDescription().createXml().release());
-        xml.addChildElement([&inner] {
-            juce::MemoryBlock inner_state;
-            (*inner)->getStateInformation(inner_state);
+        jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+        if (*inner != nullptr)
+        {
+            xml.addChildElement((*inner)->getPluginDescription().createXml().release());
+            xml.addChildElement([&inner] {
+                juce::MemoryBlock state;
+                (*inner)->getStateInformation(state);
 
-            auto stateNode = std::make_unique<juce::XmlElement>(kInnerStateTag);
-            stateNode->addTextElement(inner_state.toBase64Encoding());
-            return stateNode.release();
-        }());
+                auto stateNode = std::make_unique<juce::XmlElement>(kInnerStateTag);
+                stateNode->addTextElement(state.toBase64Encoding());
+                return stateNode.release();
+            }());
+        }
     }
 
     xml.addChildElement([this] {
-        juce::MemoryBlock shared_state;
-        shared_data_manager_.getStateInformation(shared_state);
+        juce::MemoryBlock state;
+        shared_data_manager_.getStateInformation(state, logs_directory_);
 
-        jassert(kSharedDataManStateTag != utils::kSharedStateTag);
-        auto stateNode = std::make_unique<juce::XmlElement>(kSharedDataManStateTag);
-        stateNode->addTextElement(shared_state.toBase64Encoding());
+        auto stateNode = std::make_unique<juce::XmlElement>(utils::kSharedStateTag);
+        stateNode->addTextElement(state.toBase64Encoding());
         return stateNode.release();
     }());
 
     xml.setAttribute("accept_changes", accept_changes_);
     xml.setAttribute("propagate_changes", propagate_changes_.load());
 
-#ifdef DEBUG
-    xml.writeTo(juce::File { "~/Desktop/PluginHostDev/PluginStateDebug.xml" });
-#endif
+    xml.writeTo(logs_directory_.getChildFile("PluginStateLog.xml"));
 
     const auto xlm_as_string = xml.toString();
     destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());
@@ -363,7 +379,8 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 
     auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), static_cast<size_t>(sizeInBytes)));
 
-    group_ = xml->getIntAttribute(kGroupTag, 0);
+    group_ = xml->getIntAttribute(kGroupTag, -1);
+    require(group_ != -1);
 
     if (auto* plugin_description_node = xml->getChildByName("PLUGIN"))
     {
@@ -372,14 +389,18 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 
         juce::MemoryBlock inner_state;
         inner_state.fromBase64Encoding(xml->getChildElementAllSubText(kInnerStateTag, {}));
-        jassert(!inner_state.isEmpty());
+        require(!inner_state.isEmpty());
 
         setNewPlugin(pd, inner_state);
     }
 
     juce::MemoryBlock shared_data_man_state;
-    shared_data_man_state.fromBase64Encoding(xml->getChildElementAllSubText(kSharedDataManStateTag, {}));
+    shared_data_man_state.fromBase64Encoding(xml->getChildElementAllSubText(utils::kSharedStateTag, {}));
     shared_data_manager_.setStateInformation(shared_data_man_state.getData(), static_cast<int>(shared_data_man_state.getSize()));
+
+    juce::MemoryBlock editor_props_state;
+    editor_props_state.fromBase64Encoding(xml->getChildElementAllSubText(utils::kEditorPropsTag, {}));
+    editor_props_.setStateInformation(editor_props_state.getData(), static_cast<int>(editor_props_state.getSize()));
 
     accept_changes_ = xml->getBoolAttribute("accept_changes");
     propagate_changes_.store(xml->getBoolAttribute("propagate_changes"));
@@ -391,12 +412,7 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
 {
     if (processor == this) return;
 
-#ifdef DEBUG
-    {
-        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime> realtime_inner(inner_);
-        jassert(processor == (*realtime_inner).get());
-    }
-#endif
+    // assume processor is inner, we cannot acquire a realtime mutatable here because process block runs concurrently
 
     async_caller_.callAsync([this, parameterIndex, newValue]() {
         jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
@@ -408,8 +424,9 @@ void PluginProcessor::audioProcessorParameterChanged(AudioProcessor* processor,
         if (propagate_changes_.load())
         {
             shared_data_manager_.updateParameterValue(this, parameterIndex, newValue);
-            notifyHost();
         }
+
+        notifyHost();
     });
 }
 
@@ -417,22 +434,19 @@ void PluginProcessor::audioProcessorChanged(AudioProcessor* processor, const juc
 {
     if (processor == this) return;
 
-#ifdef DEBUG
-    {
-        NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::realtime> realtime_inner(inner_);
-        jassert(processor == (*realtime_inner).get());
-    }
-#endif
+    // assume processor is inner, we cannot acquire a realtime mutatable here because process block runs concurrently
 
     async_caller_.callAsync([this, details]() {
         jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
         if (*inner == nullptr) return;
 
-        if (details.latencyChanged)
+        if (details.latencyChanged && getLatencySamples() != (*inner)->getLatencySamples())
         {
             setLatencySamples((*inner)->getLatencySamples());
         }
+
+        notifyHost();
     });
 }
 
@@ -444,6 +458,15 @@ void PluginProcessor::propagateState()
     NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
     (*inner)->getStateInformation(mb);
     shared_data_manager_.updateInnerState(this, mb);
+}
+
+bool PluginProcessor::innerSupportsSidechain() const
+{
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
+
+    if ((*inner) == nullptr) return false;
+    return (*inner)->getBusCount(kInput) > 1;
 }
 
 bool PluginProcessor::getAcceptChanges() const
@@ -518,6 +541,21 @@ void PluginProcessor::callbackUpdateParameterValue(int parameterIndex, float new
     notifyHost();
 }
 
+float PluginProcessor::getUserScale()
+{
+    return editor_props_.user_scale;
+}
+
+void PluginProcessor::setUserScale(float user_scale)
+{
+    editor_props_.user_scale = user_scale;
+}
+
+juce::KnownPluginList& PluginProcessor::getPluginList() noexcept
+{
+    return plugin_list_;
+}
+
 void PluginProcessor::setInnerParameter(int parameterIndex, float newValue)
 {
 #ifndef TESTS_TARGET
@@ -589,9 +627,9 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
 
 #ifdef DEBUG
         jassert(instance->getPluginDescription().isDuplicateOf(pd));
-        auto temp = instance->getPluginDescription().createXml();
-        temp->writeTo(juce::File { "~/Desktop/PluginHostDev/last_plugin_description.xml" });
 #endif
+        auto pd_to_log = instance->getPluginDescription().createXml();
+        pd_to_log->writeTo(logs_directory_.getChildFile("LastPluginDescription.xml"));
 
         if (error.isNotEmpty())
         {
@@ -607,7 +645,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         if (!mb.isEmpty())
             instance->setStateInformation(mb.getData(), static_cast<int>(mb.getSize()));
 
-        bool inner_was_prepared { false };
+        bool inner_prepared { false };
         if (are_we_playing_.load())
         {
             auto prepare_success = prepareInstance(instance.get(), getSampleRate(), getBlockSize());
@@ -620,28 +658,31 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
                 inner_plugin_description_.reset();
                 return;
             }
-            inner_was_prepared = true;
+            inner_prepared = true;
         }
 
-        editor_style_ = EditorStyle::newWindow;
         instance->addListener(this);
 
         setLatencySamples(instance->getLatencySamples());
 
+        bool editor_was_open { false };
         {
             NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
             if ((*inner) != nullptr && (*inner)->getActiveEditor() != nullptr)
             {
+                editor_was_open = true;
                 // this can happen on Undo
-                needs_editor_deletion_.store(true);
+                needs_editor_deletion_ = true;
                 juce::NullCheckedInvocation::invoke(plugin_changed_);
+                needs_editor_deletion_ = false;
             }
             *inner = std::move(instance);
-            inner_prepared_.store(inner_was_prepared);
-            is_an_inner_loaded_.store(true);
+            inner_prepared_.store(inner_prepared);
+            is_an_inner_loaded_ = true;
         }
-
+        wants_inner_editor_ = editor_was_open;
         juce::NullCheckedInvocation::invoke(plugin_changed_);
+        wants_inner_editor_ = false;
 
         if (onSuccessCallback.has_value())
             (*onSuccessCallback)();
@@ -677,15 +718,15 @@ void PluginProcessor::callbackRemoveInner()
         return;
 
     inner_prepared_.store(false);
-    needs_editor_deletion_.store(true);
+    needs_editor_deletion_ = true;
     // make PluginEditor delete inner editor
     juce::NullCheckedInvocation::invoke(plugin_changed_);
     *inner = nullptr;
 
-    is_an_inner_loaded_.store(false);
+    is_an_inner_loaded_ = false;
     inner_plugin_description_.reset();
     shared_data_manager_.removeInner();
-    needs_editor_deletion_.store(false);
+    needs_editor_deletion_ = false;
 
     setLatencySamples(0);
 
@@ -694,6 +735,7 @@ void PluginProcessor::callbackRemoveInner()
 
 void PluginProcessor::notifyHost()
 {
+    // todo: add a dummy parameter to change here. updateHostDisplay does not work on a AU build in REAPER
     auto change_details = AudioProcessorListener::ChangeDetails {};
     updateHostDisplay(change_details.withNonParameterStateChanged(true));
 }
@@ -735,12 +777,17 @@ void PluginProcessor::removeInner()
 
 bool PluginProcessor::needsEditorDeletion() const
 {
-    return needs_editor_deletion_.load();
+    return needs_editor_deletion_;
 }
 
 bool PluginProcessor::isAnInnerLoaded() const
 {
-    return is_an_inner_loaded_.load();
+    return is_an_inner_loaded_;
+}
+
+bool PluginProcessor::wantsInnerEditor() const
+{
+    return wants_inner_editor_;
 }
 
 std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor() const
@@ -752,7 +799,9 @@ std::unique_ptr<juce::AudioProcessorEditor> PluginProcessor::createInnerEditor()
 
 EditorStyle PluginProcessor::getEditorStyle() const noexcept
 {
-    return editor_style_;
+    // This is not good, this EditorStyle should probably go away,
+    // but it may be insteresting to try the other style it in the future
+    return EditorStyle::newWindow;
 }
 
 void PluginProcessor::changeListenerCallback(juce::ChangeBroadcaster* source)
@@ -835,14 +884,7 @@ bool PluginProcessor::prepareInstance(juce::AudioPluginInstance* instance, doubl
     inner_process_buffer_ = juce::AudioBuffer<float> {
         std::max(instance->getTotalNumInputChannels(), instance->getTotalNumOutputChannels()), samplesPerBlock
     };
-    for (auto ch = 0; ch < inner_process_buffer_.getNumChannels(); ch++)
-    {
-        auto channel_data = inner_process_buffer_.getWritePointer(ch);
-        for (auto i = 0; i < inner_process_buffer_.getNumSamples(); i++)
-        {
-            channel_data[i] = 0.0;
-        }
-    }
+    fill_with_silence(inner_process_buffer_);
 
     return true;
 }

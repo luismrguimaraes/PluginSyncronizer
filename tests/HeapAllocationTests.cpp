@@ -1,7 +1,7 @@
 #include "helpers/test_ui_helpers.h"
 #include "helpers/test_utils.hpp"
 
-#include <PluginProcessor.h>
+#include <PluginProcessor.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -11,32 +11,33 @@
 
 // chatGPT allocation tracker implementation
 
+#include <cstddef>
+#include <cstdlib>
+#include <new>
+
 namespace
 {
-    std::size_t allocationCount { 0 };
-    bool trackAllocations = false;
+    thread_local std::size_t allocationCount = 0;
 
     struct AllocationScopedTracker
     {
         AllocationScopedTracker()
+            : startCount(allocationCount)
         {
-            allocationCount = 0;
-            trackAllocations = true;
         }
 
-        ~AllocationScopedTracker()
+        [[nodiscard]] std::size_t count() const noexcept
         {
-            trackAllocations = false;
+            return allocationCount - startCount;
         }
 
-        std::size_t count() const
+        void reset() noexcept
         {
-            return allocationCount;
+            startCount = allocationCount;
         }
-        void reset() const
-        {
-            allocationCount = 0;
-        }
+
+    private:
+        std::size_t startCount;
     };
 }
 
@@ -44,9 +45,7 @@ void* operator new(std::size_t size)
 {
     if (void* ptr = std::malloc(size))
     {
-        if (trackAllocations)
-            ++allocationCount;
-
+        ++allocationCount;
         return ptr;
     }
 
@@ -62,9 +61,7 @@ void* operator new[](std::size_t size)
 {
     if (void* ptr = std::malloc(size))
     {
-        if (trackAllocations)
-            ++allocationCount;
-
+        ++allocationCount;
         return ptr;
     }
 
@@ -76,9 +73,20 @@ void operator delete[](void* ptr) noexcept
     std::free(ptr);
 }
 
+// Sized delete overloads
+void operator delete(void* ptr, std::size_t) noexcept
+{
+    std::free(ptr);
+}
+
+void operator delete[](void* ptr, std::size_t) noexcept
+{
+    std::free(ptr);
+}
+
 TEST_CASE("Allocation test", "[HeapAllocation]")
 {
-#ifndef TARGET_OS_OSX
+#ifndef JUCE_MAC
     return;
 #endif
 
@@ -97,8 +105,8 @@ TEST_CASE("Allocation test", "[HeapAllocation]")
         CHECK(processor.getPluginDescription().has_value());
     });
     CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
-    check_inner_loaded_and_pd_has_value(processor1);
-    check_inner_loaded_and_pd_has_value(processor2);
+    CHECK(is_inner_loaded_and_pd_has_value(processor1));
+    CHECK(is_inner_loaded_and_pd_has_value(processor2));
 
     processor1.prepareToPlay(44100, 512);
     processor2.prepareToPlay(44100, 512);
@@ -120,6 +128,7 @@ TEST_CASE("Allocation test", "[HeapAllocation]")
     AllocationScopedTracker process_allocations;
     processor1.processBlock(audio_buffer, midi_buffer);
     CHECK(process_allocations.count() == 0);
+    CHECK(!is_silence(audio_buffer));
 
     runWithinPluginEditor(processor1, [](PluginProcessor& processor) {
         auto inner = processor.getInner();

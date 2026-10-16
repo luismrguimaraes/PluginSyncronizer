@@ -19,7 +19,7 @@ include(JUCEDefaults)
 # This is the internal name of the project and the name of JUCE's shared code target
 # Note: This cannot have spaces (it may be 2024, but you can't have it all!)
 # Worry not, JUCE's PRODUCT_NAME can have spaces (and is what DAWs display)
-set(PROJECT_NAME "PluginHost")
+set(PROJECT_NAME "PluginSyncronizer")
 
 # Worry not, JUCE's PRODUCT_NAME can have spaces (and is what DAWs will display)
 # You can also just have it be the same thing as PROJECT_NAME
@@ -27,13 +27,13 @@ set(PROJECT_NAME "PluginHost")
 #   set(PROJECT_NAME "MyPlugin_v${MAJOR_VERSION}")
 # Doing so enables major versions to show up in IDEs and DAWs as separate plugins
 # allowing you to change parameters and behavior without breaking existing user projects
-set(PRODUCT_NAME "Plugin Host")
+set(PRODUCT_NAME "Plugin Syncronizer")
 
 # Change me! Used for the MacOS bundle name and Installers
 set(COMPANY_NAME "Luis")
 
 # Change me! Used for the MacOS bundle identifier (and signing)
-set(BUNDLE_ID "com.luis.pluginhost")
+set(BUNDLE_ID "com.luis.pluginsyncronizer")
 
 # Change me! Set the plugin formats you want built
 # Valid choices: AAX Unity VST VST3 AU AUv3 Standalone
@@ -146,7 +146,7 @@ target_compile_definitions(SharedCode
     CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
     VERSION="${CURRENT_VERSION}"
 
-    PRODUCT_NAME_WITHOUT_VERSION="PluginHost"
+    PRODUCT_NAME_WITHOUT_VERSION="PluginSyncronizer"
 
     JUCE_PLUGINHOST_AU=1
     JUCE_PLUGINHOST_VST3=1

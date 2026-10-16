@@ -1,4 +1,4 @@
-#include "DebugUtils.hpp"
+#include "JuceUtils.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
 
 namespace
@@ -50,4 +50,30 @@ void JuceDebugger::readInput(const juce::AudioBuffer<float>& buffer)
 void JuceDebugger::readOutput(const juce::AudioBuffer<float>& buffer)
 {
     readJuceBuffer(buffer, juce_output_buffer_debugger_);
+}
+
+void fill_with_silence(juce::AudioBuffer<float>& buffer_to_fill)
+{
+    for (auto ch = 0; ch < buffer_to_fill.getNumChannels(); ch++)
+    {
+        auto channel_data = buffer_to_fill.getWritePointer(ch);
+        for (auto i = 0; i < buffer_to_fill.getNumSamples(); i++)
+        {
+            channel_data[i] = 0.0;
+        }
+    }
+}
+
+bool is_silence(juce::AudioBuffer<float>& buffer)
+{
+    for (auto ch = 0; ch < buffer.getNumChannels(); ch++)
+    {
+        auto channel_data = buffer.getWritePointer(ch);
+        for (auto i = 0; i < buffer.getNumSamples(); i++)
+        {
+            if (!juce::approximatelyEqual(channel_data[i], 0.0f)) return false;
+        }
+    }
+
+    return true;
 }

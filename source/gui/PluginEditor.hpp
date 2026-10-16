@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../PluginProcessor.h"
+#include "../PluginProcessor.hpp"
 #include "melatonin_inspector/melatonin_inspector.h"
 
 namespace gui
@@ -17,7 +17,7 @@ namespace gui
     class PluginEditor : public ScaledDocumentWindowDelegate, public juce::AudioProcessorEditor
     {
     public:
-        explicit PluginEditor(PluginProcessor&);
+        PluginEditor(PluginProcessor& processor_ref, juce::File logs_directory);
         ~PluginEditor() override;
 
         void paint(juce::Graphics&) override;
@@ -35,6 +35,8 @@ namespace gui
         void updateUI();
         void updateComponentsVisibility();
 
+        void showInnerEditor(bool wants_keyboard_focus);
+
     private:
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 
@@ -49,7 +51,7 @@ namespace gui
 
         juce::TimedCallback ui_update_timer_;
 
-        float current_scale_factor_ { 1.0f };
+        float host_scale_factor_ { 1.0f };
 
         juce::TextButton remove_button_ { "Remove" };
         juce::TextButton show_button_ { "Show UI" };
@@ -62,5 +64,13 @@ namespace gui
         juce::ToggleButton propagate_changes_toggle_ { "Send Parameter Changes" };
 
         juce::Label inner_name_;
+        juce::Label supports_sidechain_;
+        juce::Label version_info_;
+        juce::Label no_scanned_plugins_;
+        juce::Label click_here_to_scan_;
+
+        juce::LookAndFeel_V4 look_and_feel_;
+
+        juce::Component main_component_; // this allows rescaling the whole plugin with a juce::AffineTransform
     };
 }

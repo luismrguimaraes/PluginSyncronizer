@@ -3,7 +3,7 @@
 #include <chrono>
 #include <thread>
 
-void SharedDataManager::getStateInformation(juce::MemoryBlock& destData)
+void SharedDataManager::getStateInformation(juce::MemoryBlock& destData, juce::File logs_directory)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
@@ -14,9 +14,7 @@ void SharedDataManager::getStateInformation(juce::MemoryBlock& destData)
         xml.addChildElement(shared_data_->plugin_description.value().createXml().release());
     }
 
-#ifdef DEBUG
-    xml.writeTo(juce::File { "~/Desktop/PluginHostDev/SharedPluginStateDebug.xml" });
-#endif
+    xml.writeTo(logs_directory.getChildFile("SharedPluginStateLog.xml"));
 
     const auto xlm_as_string = xml.toString();
     destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());
@@ -27,7 +25,7 @@ void SharedDataManager::setStateInformation(const void* data, int sizeInBytes)
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), static_cast<size_t>(sizeInBytes)));
-    jassert(xml != nullptr);
+    require(xml != nullptr);
 
     if (auto* plugin_description_node = xml->getChildByName("PLUGIN"))
     {

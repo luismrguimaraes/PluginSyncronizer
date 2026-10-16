@@ -1,4 +1,4 @@
-#include <PluginProcessor.h>
+#include <PluginProcessor.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -10,7 +10,7 @@ static inline const juce::String kSalaVST3 { "./plugin-descriptions/sala_vst3.xm
 
 juce::PluginDescription get_pd_from_xml(juce::String xmlRelativePath);
 
-void check_inner_loaded_and_pd_has_value(const PluginProcessor& processor);
+bool is_inner_loaded_and_pd_has_value(const PluginProcessor& processor);
 
 void apply_state(PluginProcessor& processor, const juce::MemoryBlock& state);
 
