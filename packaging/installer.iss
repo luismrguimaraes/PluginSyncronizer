@@ -11,7 +11,6 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 
 ; Components are used inside the script and can be composed of a set of 'Types'
 [Components]
-Name: "standalone"; Description: "Standalone application"; Types: full custom
 Name: "vst3"; Description: "VST3 plugin"; Types: full custom
 Name: "clap"; Description: "CLAP plugin"; Types: full custom
 
@@ -37,10 +36,8 @@ Type: filesandordirs; Name: "{commoncf64}\VST3\{#ProductName}Data"
 [Files]
 Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{commoncf64}\VST3\{#ProductName}.vst3\"; Excludes: *.ilk; Flags: ignoreversion recursesubdirs; Components: vst3
 Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{commoncf64}\CLAP\"; Flags: ignoreversion; Components: clap
-Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\{#ProductName}.exe"; DestDir: "{commonpf64}\{#Publisher}\{#ProductName}"; Flags: ignoreversion; Components: standalone
 
 [Icons]
-Name: "{autoprograms}\{#ProductName}"; Filename: "{commonpf64}\{#Publisher}\{#ProductName}\{#ProductName}.exe"; Components: standalone
 Name: "{autoprograms}\Uninstall {#ProductName}"; Filename: "{uninstallexe}"
 
 ; This is optional, for preset or other plugin data
