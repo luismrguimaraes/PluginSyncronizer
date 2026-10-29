@@ -6,6 +6,9 @@ Download from the [releases page](https://github.com/luismrguimaraes/PluginSyncr
 
 So far, **VST3** is the most tested format and VST3 (Plugin Syncronizer) hosting VST3 (other plugins) is the most stable combination.
 
+### Demo
+https://github.com/user-attachments/assets/551a12d8-c295-42ee-aa34-b3db620c8f2f
+
 ### How to make macOS trust the plugin
 
 - open Terminal
