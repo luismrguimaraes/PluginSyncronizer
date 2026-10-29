@@ -29,8 +29,8 @@ public:
         shared_data_->listeners.reserve(10);
     }
 
-    void getStateInformation(juce::MemoryBlock& destData, juce::File logs_dir);
-    void setStateInformation(const void* data, int sizeInBytes);
+    void getStateInformation(juce::MemoryBlock& destData, const juce::File& logs_directory);
+    void setStateInformation(const void* data, int sizeInBytes, const juce::File& logs_directory);
 
     void addListener(SharedData::Listener* newListener);
     void removeListener(SharedData::Listener* listenerToRemove);

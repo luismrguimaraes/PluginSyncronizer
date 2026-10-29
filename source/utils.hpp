@@ -10,6 +10,7 @@ namespace utils
     inline const juce::String kSharedStateTag { "shared_state" };
     inline const juce::String kEditorPropsTag { "editor_props_state" };
 
-    bool
-        try_other_layouts(juce::AudioProcessor::Bus* bus, juce::AudioChannelSet& requested);
+    bool try_other_layouts(juce::AudioProcessor::Bus* bus, juce::AudioChannelSet& requested);
+
+    bool areDuplicates(const juce::PluginDescription& first, const juce::PluginDescription& second);
 }

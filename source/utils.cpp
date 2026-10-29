@@ -49,4 +49,13 @@ namespace utils
         }
         return false;
     }
+
+    bool areDuplicates(const juce::PluginDescription& first, const juce::PluginDescription& second)
+    {
+        const auto tie = [](const juce::PluginDescription& desc) {
+            return std::tie(desc.name, desc.manufacturerName, desc.deprecatedUid, desc.uniqueId);
+        };
+
+        return tie(first) == tie(second);
+    }
 }
