@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<PLUGIN name="SpectralPanner" format="VST3" category="Fx" manufacturer="Luis Guimaraes"
+        version="0.0.5" file="C:\Program Files\Common Files\VST3\SpectralPanner.vst3"
+        uniqueId="b9340e0d" isInstrument="0" fileTime="193cf4d73b8" infoUpdateTime="1a14e8095c4"
+        numInputs="0" numOutputs="0" isShell="0" hasARAExtension="0"
+        uid="5b8a7255"/>

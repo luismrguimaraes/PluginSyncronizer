@@ -3,7 +3,7 @@
 #include <chrono>
 #include <thread>
 
-void SharedDataManager::getStateInformation(juce::MemoryBlock& destData, juce::File logs_directory)
+void SharedDataManager::getStateInformation(juce::MemoryBlock& destData, const juce::File& logs_directory)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
@@ -14,18 +14,19 @@ void SharedDataManager::getStateInformation(juce::MemoryBlock& destData, juce::F
         xml.addChildElement(shared_data_->plugin_description.value().createXml().release());
     }
 
-    xml.writeTo(logs_directory.getChildFile("SharedPluginStateLog.xml"));
+    xml.writeTo(logs_directory.getChildFile("SharedPluginState.xml"));
 
     const auto xlm_as_string = xml.toString();
     destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());
 }
 
-void SharedDataManager::setStateInformation(const void* data, int sizeInBytes)
+void SharedDataManager::setStateInformation(const void* data, int sizeInBytes, const juce::File& logs_directory)
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), static_cast<size_t>(sizeInBytes)));
     require(xml != nullptr);
+    xml->writeTo(logs_directory.getChildFile("LoadedSharedPluginState.xml"));
 
     if (auto* plugin_description_node = xml->getChildByName("PLUGIN"))
     {

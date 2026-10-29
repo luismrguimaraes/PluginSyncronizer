@@ -367,7 +367,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
     xml.setAttribute("accept_changes", accept_changes_);
     xml.setAttribute("propagate_changes", propagate_changes_.load());
 
-    xml.writeTo(logs_directory_.getChildFile("PluginStateLog.xml"));
+    xml.writeTo(logs_directory_.getChildFile("PluginState.xml"));
 
     const auto xlm_as_string = xml.toString();
     destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());
@@ -378,6 +378,8 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
     auto xml = juce::XmlDocument::parse(juce::String(juce::CharPointer_UTF8(static_cast<const char*>(data)), static_cast<size_t>(sizeInBytes)));
+    require(xml != nullptr);
+    xml->writeTo(logs_directory_.getChildFile("LoadedPluginState.xml"));
 
     group_ = xml->getIntAttribute(kGroupTag, -1);
     require(group_ != -1);
@@ -396,7 +398,7 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 
     juce::MemoryBlock shared_data_man_state;
     shared_data_man_state.fromBase64Encoding(xml->getChildElementAllSubText(utils::kSharedStateTag, {}));
-    shared_data_manager_.setStateInformation(shared_data_man_state.getData(), static_cast<int>(shared_data_man_state.getSize()));
+    shared_data_manager_.setStateInformation(shared_data_man_state.getData(), static_cast<int>(shared_data_man_state.getSize()), logs_directory_);
 
     juce::MemoryBlock editor_props_state;
     editor_props_state.fromBase64Encoding(xml->getChildElementAllSubText(utils::kEditorPropsTag, {}));
@@ -499,7 +501,7 @@ void PluginProcessor::callbackLoadInner(const juce::PluginDescription& pluginDes
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
-    if (inner_plugin_description_.has_value() && pluginDescription.isDuplicateOf(inner_plugin_description_.value()))
+    if (inner_plugin_description_.has_value() && utils::areDuplicates(pluginDescription, inner_plugin_description_.value()))
         return;
 
     setNewPlugin(pluginDescription, {});
@@ -513,7 +515,7 @@ void PluginProcessor::callbackLoadInnerState([[maybe_unused]] const juce::Plugin
     if (!stateMemoryBlock.isEmpty())
     {
         jassert(inner_plugin_description_.has_value());
-        jassert(pluginDescription.isDuplicateOf(inner_plugin_description_.value()));
+        jassert(utils::areDuplicates(pluginDescription, inner_plugin_description_.value()));
 
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
         jassert(*inner != nullptr);
@@ -623,10 +625,9 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
 
         // In case inner_plugin_description_ was modified meanwhile for some reason
-        if (!inner_plugin_description_.has_value() || !pd.isDuplicateOf(inner_plugin_description_.value())) return;
-
+        if (!inner_plugin_description_.has_value() || !utils::areDuplicates(pd, inner_plugin_description_.value())) return;
 #ifdef DEBUG
-        jassert(instance->getPluginDescription().isDuplicateOf(pd));
+        jassert(utils::areDuplicates(instance->getPluginDescription(), pd));
 #endif
         auto pd_to_log = instance->getPluginDescription().createXml();
         pd_to_log->writeTo(logs_directory_.getChildFile("LastPluginDescription.xml"));

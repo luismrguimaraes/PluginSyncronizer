@@ -29,7 +29,7 @@ struct EditorProps
         juce::XmlElement xml { utils::kEditorPropsTag };
         xml.setAttribute("user_scale", user_scale);
 
-        xml.writeTo(logs_directory.getChildFile("EditorPropsStateLog.xml"));
+        xml.writeTo(logs_directory.getChildFile("EditorPropsState.xml"));
 
         const auto xlm_as_string = xml.toString();
         destData.replaceAll(xlm_as_string.toRawUTF8(), xlm_as_string.getNumBytesAsUTF8());

@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include <filesystem>
 
 namespace utils
 {
@@ -48,5 +49,24 @@ namespace utils
             if (success) return true;
         }
         return false;
+    }
+
+    bool areDuplicates(const juce::PluginDescription& first, const juce::PluginDescription& second)
+    {
+        const auto tie_1 = [](const juce::PluginDescription& desc, juce::String& filename) {
+            filename = juce::File { desc.fileOrIdentifier.toStdString() }.getFileName();
+            return std::tie(filename, desc.deprecatedUid, desc.uniqueId);
+        };
+        const auto tie_2 = [](const juce::PluginDescription& desc) {
+            return std::tie(desc.name, desc.manufacturerName, desc.deprecatedUid, desc.uniqueId);
+        };
+
+        juce::String filename_first, filename_second;
+        auto tie_1_first = tie_1(first, filename_first);
+        auto tie_1_second = tie_1(second, filename_second);
+        auto tie_2_first = tie_2(first);
+        auto tie_2_second = tie_2(second);
+
+        return tie_1_first == tie_1_second || tie_2_first == tie_2_second;
     }
 }
