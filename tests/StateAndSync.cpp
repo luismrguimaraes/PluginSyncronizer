@@ -157,7 +157,9 @@ TEST_CASE("Creating a new instance loads an inner if there is a shared plugin de
 
     PluginProcessor processor2;
     CHECK(processor2.getPluginDescription().has_value());
-    CHECK(processor2.getPluginDescription()->isDuplicateOf(pd));
+    auto processor2_pd = processor2.getPluginDescription();
+    REQUIRE(processor2_pd.has_value());
+    CHECK(utils::areDuplicates(processor2_pd.value(), pd));
 
     CHECK(messageManager->runDispatchLoopUntil(kAsyncCallWaitMs));
 

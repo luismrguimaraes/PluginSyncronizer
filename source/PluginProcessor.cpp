@@ -515,7 +515,7 @@ void PluginProcessor::callbackLoadInnerState([[maybe_unused]] const juce::Plugin
     if (!stateMemoryBlock.isEmpty())
     {
         jassert(inner_plugin_description_.has_value());
-        jassert(utils::areDuplicates(pluginDescription,inner_plugin_description_.value()));
+        jassert(utils::areDuplicates(pluginDescription, inner_plugin_description_.value()));
 
         NRTMAudioPluginInstance::ScopedAccess<farbot::ThreadType::nonRealtime> inner(inner_);
         jassert(*inner != nullptr);
@@ -627,7 +627,7 @@ void PluginProcessor::setNewPlugin(const juce::PluginDescription& pd, const juce
         // In case inner_plugin_description_ was modified meanwhile for some reason
         if (!inner_plugin_description_.has_value() || !utils::areDuplicates(pd, inner_plugin_description_.value())) return;
 #ifdef DEBUG
-        jassert(utils::areDuplicates(std::move(instance->getPluginDescription()), pd));
+        jassert(utils::areDuplicates(instance->getPluginDescription(), pd));
 #endif
         auto pd_to_log = instance->getPluginDescription().createXml();
         pd_to_log->writeTo(logs_directory_.getChildFile("LastPluginDescription.xml"));
