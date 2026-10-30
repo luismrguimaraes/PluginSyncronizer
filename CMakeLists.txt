@@ -30,10 +30,10 @@ set(PROJECT_NAME "PluginSyncronizer")
 set(PRODUCT_NAME "Plugin Syncronizer")
 
 # Change me! Used for the MacOS bundle name and Installers
-set(COMPANY_NAME "Luis")
+set(COMPANY_NAME "Luis G.")
 
 # Change me! Used for the MacOS bundle identifier (and signing)
-set(BUNDLE_ID "com.luis.pluginsyncronizer")
+set(BUNDLE_ID "com.luisg.pluginsyncronizer")
 
 # Change me! Set the plugin formats you want built
 # Valid choices: AAX Unity VST VST3 AU AUv3 Standalone
