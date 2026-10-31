@@ -151,19 +151,6 @@ namespace gui
         setSize(kEditorWidth, kEditorHeight);
         setResizable(true, true);
 
-        addAndMakeVisible(main_component_);
-
-        main_component_.addChildComponent(remove_button_);
-        main_component_.addChildComponent(show_button_);
-        main_component_.addChildComponent(propagate_state_button_);
-        main_component_.addChildComponent(accept_changes_toggle_);
-        main_component_.addChildComponent(propagate_changes_toggle_);
-        main_component_.addChildComponent(loader_.get());
-
-#ifdef DEBUG
-        main_component_.addChildComponent(inspect_button_);
-#endif
-
         inner_name_.setJustificationType(juce::Justification::centred);
         supports_sidechain_.setJustificationType(juce::Justification::centred);
         supports_sidechain_.setText("Supports Sidechain", juce::NotificationType::dontSendNotification);
@@ -178,12 +165,6 @@ namespace gui
 
         click_here_to_scan_.setJustificationType(juce::Justification::centredLeft);
         click_here_to_scan_.setText("<= click here to scan", juce::NotificationType::dontSendNotification);
-
-        main_component_.addChildComponent(inner_name_);
-        main_component_.addChildComponent(supports_sidechain_);
-        main_component_.addChildComponent(version_info_);
-        main_component_.addChildComponent(no_scanned_plugins_);
-        main_component_.addChildComponent(click_here_to_scan_);
 
         remove_button_.onClick = [this] { clearPlugin(); };
         show_button_.onClick = [this] {
@@ -225,6 +206,24 @@ namespace gui
             setLookAndFeel(&look_and_feel_);
             main_component_.setLookAndFeel(&look_and_feel_);
         }
+
+        addAndMakeVisible(main_component_);
+        main_component_.addChildComponent(loader_.get());
+        main_component_.addChildComponent(click_here_to_scan_);
+        main_component_.addChildComponent(no_scanned_plugins_);
+
+        main_component_.addChildComponent(supports_sidechain_);
+        main_component_.addChildComponent(version_info_);
+        main_component_.addChildComponent(inner_name_);
+
+        main_component_.addChildComponent(remove_button_);
+        main_component_.addChildComponent(show_button_);
+        main_component_.addChildComponent(propagate_state_button_);
+        main_component_.addChildComponent(accept_changes_toggle_);
+        main_component_.addChildComponent(propagate_changes_toggle_);
+#ifdef DEBUG
+        main_component_.addChildComponent(inspect_button_);
+#endif
 
         // setBounds
         {
@@ -379,8 +378,8 @@ namespace gui
         propagate_state_button_.setVisible(is_loaded);
         supports_sidechain_.setVisible(is_loaded);
 
-        no_scanned_plugins_.setVisible(processor_ref_.getPluginList().getTypes().isEmpty());
-        click_here_to_scan_.setVisible(processor_ref_.getPluginList().getTypes().isEmpty());
+        no_scanned_plugins_.setVisible(!is_loaded && processor_ref_.getPluginList().getTypes().isEmpty());
+        click_here_to_scan_.setVisible(!is_loaded && processor_ref_.getPluginList().getTypes().isEmpty());
 
 #ifdef DEBUG
         inspect_button_.setVisible(true);
