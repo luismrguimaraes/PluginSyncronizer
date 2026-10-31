@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils.hpp"
+
 #include <array>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_core/juce_core.h>
@@ -14,9 +16,11 @@ struct SharedData
         // ToDo: also add parameterBegin and end touch
         virtual void callbackUpdateParameterValue(int parameterIndex, float newValue) = 0;
         virtual void callbackRemoveInner() = 0;
+
+        virtual size_t getGroup() const = 0;
     };
 
-    std::optional<juce::PluginDescription> plugin_description;
+    std::array<std::optional<juce::PluginDescription>, utils::kGroupsCount> plugin_descriptions;
 
     std::vector<SharedData::Listener*> listeners;
 };
@@ -29,7 +33,7 @@ public:
         shared_data_->listeners.reserve(10);
     }
 
-    void getStateInformation(juce::MemoryBlock& destData, const juce::File& logs_directory);
+    void getStateInformation(juce::MemoryBlock& destData, const juce::File& logs_directory) const;
     void setStateInformation(const void* data, int sizeInBytes, const juce::File& logs_directory);
 
     void addListener(SharedData::Listener* newListener);
@@ -39,9 +43,9 @@ public:
     void updateInnerState(const SharedData::Listener* sender, juce::MemoryBlock memoryBlock);
     void updateParameterValue(const SharedData::Listener* sender, int parameterIndex, float newValue);
 
-    void removeInner();
+    void removeInner(const SharedData::Listener* sender);
 
-    std::optional<juce::PluginDescription> getPluginDescription();
+    std::optional<juce::PluginDescription> getPluginDescription(size_t group);
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SharedDataManager)

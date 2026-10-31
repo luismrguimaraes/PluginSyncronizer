@@ -1,12 +1,11 @@
 #pragma once
 
 #include "SharedData.hpp"
-#include "debug/JuceUtils.hpp"
 #include "farbot/include/farbot/AsyncCaller.hpp"
 #include "farbot/include/farbot/RealtimeObject.hpp"
 #include "farbot/include/farbot/fifo.hpp"
+#include "helpers/JuceUtils.hpp"
 #include "juce_core/system/juce_PlatformDefs.h"
-#include "utils.hpp"
 #include <exception>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <vector>
@@ -69,6 +68,8 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
 
+    void reloadCachedPluginList();
+
     const juce::String getName() const override;
 
     bool acceptsMidi() const override;
@@ -115,6 +116,7 @@ public:
     void callbackLoadInnerState(const juce::PluginDescription& pluginDescription, const juce::MemoryBlock& stateMemoryBlock) override;
     void callbackUpdateParameterValue(int parameterIndex, float newValue) override;
     void callbackRemoveInner() override;
+    size_t getGroup() const override;
 
     void notifyHost();
 
@@ -165,7 +167,7 @@ private:
     juce::AudioBuffer<float> double_process_buffer_;
     juce::AudioProcessorValueTreeState apvts_;
 
-    int group_ { 0 };
+    size_t group_ { 0 };
 
     SharedDataManager shared_data_manager_;
     bool accept_changes_ { true };

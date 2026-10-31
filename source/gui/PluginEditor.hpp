@@ -30,7 +30,6 @@ namespace gui
 
     private: //NOLINT
         void pluginChanged();
-        void clearPlugin();
 
         void updateUI();
         void updateComponentsVisibility();

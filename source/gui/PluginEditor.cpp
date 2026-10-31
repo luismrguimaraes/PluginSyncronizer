@@ -147,6 +147,8 @@ namespace gui
             p.createSharedPluginInstance(pd, editorStyle);
         });
 
+        processor_ref_.reloadCachedPluginList();
+
         auto user_scale = processor_ref_.getUserScale();
         setSize(kEditorWidth, kEditorHeight);
         setResizable(true, true);
@@ -166,7 +168,11 @@ namespace gui
         click_here_to_scan_.setJustificationType(juce::Justification::centredLeft);
         click_here_to_scan_.setText("<= click here to scan", juce::NotificationType::dontSendNotification);
 
-        remove_button_.onClick = [this] { clearPlugin(); };
+        remove_button_.onClick = [this] {
+            processor_ref_.removeInner();
+            updateUI();
+            loader_->grabKeyboardFocus();
+        };
         show_button_.onClick = [this] {
             showInnerEditor(true);
         };
@@ -350,13 +356,6 @@ namespace gui
         }
 
         supports_sidechain_.setText(processor_ref_.innerSupportsSidechain() ? "Supports Sidechain" : "", juce::NotificationType::dontSendNotification);
-    }
-
-    void PluginEditor::clearPlugin()
-    {
-        processor_ref_.removeInner();
-        updateUI();
-        loader_->grabKeyboardFocus();
     }
 
     void PluginEditor::updateUI()

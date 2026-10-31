@@ -61,20 +61,19 @@ PluginProcessor::PluginProcessor()
 
     if (auto savedPluginList = app_properties_.getUserSettings()->getXmlValue("pluginList_"))
         plugin_list_.recreateFromXml(*savedPluginList);
+    juce::MessageManagerLock lock; // why is this here?
+    plugin_list_.addChangeListener(this);
 
     juce::String logs_folder { "Logs" };
     logs_directory_ = app_properties_.getUserSettings()->getFile().getParentDirectory().getChildFile(logs_folder);
     logs_directory_.createDirectory();
-
-    juce::MessageManagerLock lock; // why is this here?
-    plugin_list_.addChangeListener(this);
 
     shared_data_manager_.addListener(this);
     this->addListener(this);
 
     async_call_processing_timer_.startTimer(kAsyncCallProcessingMs);
 
-    auto shared_pd = shared_data_manager_.getPluginDescription();
+    auto shared_pd = shared_data_manager_.getPluginDescription(group_);
     if (shared_pd.has_value())
     {
         setNewPlugin(shared_pd.value(), {});
@@ -189,7 +188,7 @@ void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
                     "Could not prepare plugin. Removing it...",
                     "");
                 message_box_ = juce::AlertWindow::showScopedAsync(options, nullptr);
-                removeInner();
+                shared_data_manager_.removeInner(this);
             }
             else
             {
@@ -310,14 +309,23 @@ void PluginProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::Midi
 }
 
 //==============================================================================
+
+juce::AudioProcessorEditor* PluginProcessor::createEditor()
+{
+    return new gui::PluginEditor(*this, logs_directory_);
+}
+
 bool PluginProcessor::hasEditor() const
 {
     return true; // (change this to false if you choose to not supply an editor)
 }
 
-juce::AudioProcessorEditor* PluginProcessor::createEditor()
+void PluginProcessor::reloadCachedPluginList()
 {
-    return new gui::PluginEditor(*this, logs_directory_);
+    auto user_settings = app_properties_.getUserSettings();
+    user_settings->reload();
+    if (auto savedPluginList = user_settings->getXmlValue("pluginList_"))
+        plugin_list_.recreateFromXml(*savedPluginList);
 }
 
 //==============================================================================
@@ -327,7 +335,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 
     juce::XmlElement xml { utils::kMainStateTag };
 
-    xml.setAttribute(kGroupTag, group_);
+    xml.setAttribute(kGroupTag, static_cast<int>(group_));
 
     xml.addChildElement([this] {
         juce::MemoryBlock state;
@@ -381,8 +389,9 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
     require(xml != nullptr);
     xml->writeTo(logs_directory_.getChildFile("LoadedPluginState.xml"));
 
-    group_ = xml->getIntAttribute(kGroupTag, -1);
-    require(group_ != -1);
+    auto group = xml->getIntAttribute(kGroupTag, -1);
+    require(group != -1);
+    group_ = static_cast<size_t>(group);
 
     if (auto* plugin_description_node = xml->getChildByName("PLUGIN"))
     {
@@ -726,12 +735,15 @@ void PluginProcessor::callbackRemoveInner()
 
     is_an_inner_loaded_ = false;
     inner_plugin_description_.reset();
-    shared_data_manager_.removeInner();
+    shared_data_manager_.removeInner(this);
     needs_editor_deletion_ = false;
 
     setLatencySamples(0);
+}
 
-    notifyHost();
+size_t PluginProcessor::getGroup() const
+{
+    return group_;
 }
 
 void PluginProcessor::notifyHost()
@@ -773,7 +785,8 @@ void PluginProcessor::processorLayoutsChanged()
 
 void PluginProcessor::removeInner()
 {
-    shared_data_manager_.removeInner();
+    shared_data_manager_.removeInner(this);
+    notifyHost();
 }
 
 bool PluginProcessor::needsEditorDeletion() const
